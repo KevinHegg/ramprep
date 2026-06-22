@@ -1,7 +1,9 @@
 import { db } from './db'
 import {
   seedEquipment,
+  seedExerciseMedia,
   seedExercises,
+  seedRoadmap,
   seedRoutineExercises,
   seedRoutines,
   seedSchedule,
@@ -16,10 +18,12 @@ import type {
   RoutineExercise,
   SchedulePreference,
   SkipReason,
+  TourRoadmap,
   UserSettings,
   WorkoutDraftEntry,
   WorkoutLog,
 } from '../types'
+import { mostRecentCompletedEntry, resolveExerciseLogDefaults } from '../utils/defaults'
 
 const nowIso = () => new Date().toISOString()
 
@@ -34,12 +38,22 @@ export const createId = (prefix: string) => {
 export const initializeAppData = async () => {
   const settings = await db.settings.get('default')
   if (settings) {
+    await ensureV11Seeds()
     return
   }
 
   await db.transaction(
     'rw',
-    [db.exercises, db.routines, db.routineExercises, db.settings, db.equipment, db.schedulePreferences],
+    [
+      db.exercises,
+      db.routines,
+      db.routineExercises,
+      db.settings,
+      db.equipment,
+      db.schedulePreferences,
+      db.exerciseMedia,
+      db.tourRoadmaps,
+    ],
     async () => {
       await db.exercises.bulkAdd(seedExercises)
       await db.routines.bulkAdd(seedRoutines)
@@ -47,6 +61,67 @@ export const initializeAppData = async () => {
       await db.settings.add({ ...seedSettings, seededAt: nowIso(), updatedAt: nowIso() })
       await db.equipment.bulkAdd(seedEquipment)
       await db.schedulePreferences.add({ ...seedSchedule, updatedAt: nowIso() })
+      await db.exerciseMedia.bulkAdd(seedExerciseMedia)
+      await db.tourRoadmaps.add({ ...seedRoadmap, updatedAt: nowIso() })
+    },
+  )
+}
+
+export const ensureV11Seeds = async () => {
+  const [
+    existingExercises,
+    existingRoutines,
+    existingRoutineExercises,
+    existingMedia,
+    existingRoadmap,
+    schedule,
+  ] = await Promise.all([
+    db.exercises.toArray(),
+    db.routines.toArray(),
+    db.routineExercises.toArray(),
+    db.exerciseMedia.toArray(),
+    db.tourRoadmaps.get('default'),
+    db.schedulePreferences.get('default'),
+  ])
+
+  const exerciseIds = new Set(existingExercises.map((item) => item.id))
+  const routineIds = new Set(existingRoutines.map((item) => item.id))
+  const routineExerciseIds = new Set(existingRoutineExercises.map((item) => item.id))
+  const mediaIds = new Set(existingMedia.map((item) => item.id))
+
+  await db.transaction(
+    'rw',
+    [db.exercises, db.routines, db.routineExercises, db.exerciseMedia, db.tourRoadmaps, db.schedulePreferences],
+    async () => {
+      const missingExercises = seedExercises.filter((item) => !exerciseIds.has(item.id))
+      const missingRoutines = seedRoutines.filter((item) => !routineIds.has(item.id))
+      const missingRoutineExercises = seedRoutineExercises.filter((item) => !routineExerciseIds.has(item.id))
+      const missingMedia = seedExerciseMedia.filter((item) => !mediaIds.has(item.id))
+
+      if (missingExercises.length) {
+        await db.exercises.bulkAdd(missingExercises)
+      }
+      if (missingRoutines.length) {
+        await db.routines.bulkAdd(missingRoutines)
+      }
+      if (missingRoutineExercises.length) {
+        await db.routineExercises.bulkAdd(missingRoutineExercises)
+      }
+      if (missingMedia.length) {
+        await db.exerciseMedia.bulkAdd(missingMedia)
+      }
+      if (!existingRoadmap) {
+        await db.tourRoadmaps.add({ ...seedRoadmap, updatedAt: nowIso() })
+      }
+      if (schedule) {
+        await db.schedulePreferences.put({
+          ...schedule,
+          busyWorkWeek: schedule.busyWorkWeek ?? false,
+          hillFocusWeek: schedule.hillFocusWeek ?? false,
+          recoveryWeek: schedule.recoveryWeek ?? false,
+          updatedAt: schedule.updatedAt ?? nowIso(),
+        })
+      }
     },
   )
 }
@@ -63,6 +138,9 @@ export const resetDemoData = async () => {
       db.settings,
       db.equipment,
       db.schedulePreferences,
+      db.personalExerciseDefaults,
+      db.exerciseMedia,
+      db.tourRoadmaps,
     ],
     async () => {
       await Promise.all([
@@ -74,6 +152,9 @@ export const resetDemoData = async () => {
         db.settings.clear(),
         db.equipment.clear(),
         db.schedulePreferences.clear(),
+        db.personalExerciseDefaults.clear(),
+        db.exerciseMedia.clear(),
+        db.tourRoadmaps.clear(),
       ])
 
       await db.exercises.bulkAdd(seedExercises)
@@ -82,6 +163,8 @@ export const resetDemoData = async () => {
       await db.settings.add({ ...seedSettings, seededAt: nowIso(), updatedAt: nowIso() })
       await db.equipment.bulkAdd(seedEquipment)
       await db.schedulePreferences.add({ ...seedSchedule, updatedAt: nowIso() })
+      await db.exerciseMedia.bulkAdd(seedExerciseMedia)
+      await db.tourRoadmaps.add({ ...seedRoadmap, updatedAt: nowIso() })
     },
   )
 }
@@ -93,6 +176,9 @@ export const getAppData = async (): Promise<AppData> => {
     routineExercises,
     workoutLogs,
     exerciseLogEntries,
+    personalExerciseDefaults,
+    exerciseMedia,
+    roadmap,
     settings,
     equipment,
     schedule,
@@ -102,17 +188,32 @@ export const getAppData = async (): Promise<AppData> => {
     db.routineExercises.orderBy('order').toArray(),
     db.workoutLogs.orderBy('completedAt').reverse().toArray(),
     db.exerciseLogEntries.toArray(),
+    db.personalExerciseDefaults.toArray(),
+    db.exerciseMedia.toArray(),
+    db.tourRoadmaps.get('default'),
     db.settings.get('default'),
     db.equipment.toArray(),
     db.schedulePreferences.get('default'),
   ])
 
-  if (!settings || !schedule) {
+  if (!settings || !schedule || !roadmap) {
     await initializeAppData()
     return getAppData()
   }
 
-  return { exercises, routines, routineExercises, workoutLogs, exerciseLogEntries, settings, equipment, schedule }
+  return {
+    exercises,
+    routines,
+    routineExercises,
+    workoutLogs,
+    exerciseLogEntries,
+    personalExerciseDefaults,
+    exerciseMedia,
+    roadmap,
+    settings,
+    equipment,
+    schedule,
+  }
 }
 
 export const saveExercise = async (exercise: Exercise) => {
@@ -181,12 +282,46 @@ export const saveSchedule = async (schedule: SchedulePreference) => {
   await db.schedulePreferences.put({ ...schedule, updatedAt: nowIso() })
 }
 
+export const saveRoadmap = async (roadmap: TourRoadmap) => {
+  await db.tourRoadmaps.put({ ...roadmap, updatedAt: nowIso() })
+}
+
 export const saveEquipment = async (equipment: Equipment) => {
   await db.equipment.put(equipment)
 }
 
+export const updateExerciseDefaultsFromLog = async (entry: ExerciseLogEntry) => {
+  await db.personalExerciseDefaults.put({
+    id: `default-${entry.exerciseId}`,
+    exerciseId: entry.exerciseId,
+    sets: entry.sets,
+    reps: entry.reps,
+    weight: entry.weight,
+    durationSeconds: entry.durationSeconds,
+    distance: entry.distance,
+    effort: entry.effort,
+    updatedAt: nowIso(),
+    source: 'last-log',
+  })
+}
+
+export const getExerciseLogDefaults = async (
+  exerciseId: string,
+  routineExercise?: RoutineExercise,
+  exercise?: Exercise,
+  units = 'lb',
+) => {
+  const [personalDefault, logs, entries] = await Promise.all([
+    db.personalExerciseDefaults.get(`default-${exerciseId}`),
+    db.workoutLogs.orderBy('completedAt').reverse().toArray(),
+    db.exerciseLogEntries.where('exerciseId').equals(exerciseId).toArray(),
+  ])
+  const recentEntry = mostRecentCompletedEntry(exerciseId, entries, logs)
+  return resolveExerciseLogDefaults({ exercise, routineExercise, personalDefault, recentEntry, units })
+}
+
 export const createWorkoutLog = async (
-  routine: Routine,
+  routine: Pick<Routine, 'id' | 'name'> | { name: string; id?: string },
   entries: WorkoutDraftEntry[],
   options: { totalMinutes?: number; notes?: string; travelMode?: boolean; deloadApplied?: boolean } = {},
 ) => {
@@ -212,10 +347,11 @@ export const createWorkoutLog = async (
     workoutLogId,
   }))
 
-  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, async () => {
+  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, db.personalExerciseDefaults, async () => {
     await db.workoutLogs.add(workoutLog)
     if (logEntries.length) {
       await db.exerciseLogEntries.bulkAdd(logEntries)
+      await Promise.all(logEntries.map(updateExerciseDefaultsFromLog))
     }
   })
 
@@ -238,11 +374,14 @@ export const createSkippedWorkout = async (routine: Routine, skipReason: SkipRea
 }
 
 export const updateWorkoutLog = async (log: WorkoutLog, entries: ExerciseLogEntry[]) => {
-  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, async () => {
+  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, db.personalExerciseDefaults, async () => {
     await db.workoutLogs.put({ ...log, updatedAt: nowIso() })
     await db.exerciseLogEntries.where('workoutLogId').equals(log.id).delete()
     if (entries.length) {
       await db.exerciseLogEntries.bulkAdd(entries.map((entry) => ({ ...entry, workoutLogId: log.id })))
+      if (log.status === 'completed') {
+        await Promise.all(entries.map(updateExerciseDefaultsFromLog))
+      }
     }
   })
 }
@@ -278,6 +417,9 @@ export const importAllData = async (rawJson: string) => {
       db.settings,
       db.equipment,
       db.schedulePreferences,
+      db.personalExerciseDefaults,
+      db.exerciseMedia,
+      db.tourRoadmaps,
     ],
     async () => {
       await Promise.all([
@@ -289,6 +431,9 @@ export const importAllData = async (rawJson: string) => {
         db.settings.clear(),
         db.equipment.clear(),
         db.schedulePreferences.clear(),
+        db.personalExerciseDefaults.clear(),
+        db.exerciseMedia.clear(),
+        db.tourRoadmaps.clear(),
       ])
 
       await db.exercises.bulkAdd(data.exercises)
@@ -296,6 +441,9 @@ export const importAllData = async (rawJson: string) => {
       await db.routineExercises.bulkAdd(data.routineExercises ?? [])
       await db.workoutLogs.bulkAdd(data.workoutLogs ?? [])
       await db.exerciseLogEntries.bulkAdd(data.exerciseLogEntries ?? [])
+      await db.personalExerciseDefaults.bulkAdd(data.personalExerciseDefaults ?? [])
+      await db.exerciseMedia.bulkAdd(data.exerciseMedia ?? [])
+      await db.tourRoadmaps.add(data.roadmap ?? seedRoadmap)
       await db.settings.add(data.settings)
       await db.equipment.bulkAdd(data.equipment ?? [])
       await db.schedulePreferences.add(data.schedule)

@@ -1,11 +1,15 @@
 import type {
+  BikeTourPurpose,
   Equipment,
   EquipmentKind,
   Exercise,
   ExerciseDefaults,
+  ExerciseGroup,
+  ExerciseMedia,
   Routine,
   RoutineExercise,
   SchedulePreference,
+  TourRoadmap,
   UserSettings,
 } from '../types'
 
@@ -42,6 +46,8 @@ interface ExerciseSeed {
   targetAreas: string[]
   equipment: EquipmentKind[]
   difficulty: Exercise['difficulty']
+  group?: ExerciseGroup
+  bikeTourPurpose?: BikeTourPurpose[]
   defaults: ExerciseDefaults
   videoUrl?: string
   imageUrl?: string
@@ -530,7 +536,80 @@ const exerciseSeeds: ExerciseSeed[] = [
   },
 ]
 
-export const seedExercises = exerciseSeeds.map(makeExercise)
+const quickExercise = (
+  id: string,
+  name: string,
+  group: ExerciseGroup,
+  equipment: EquipmentKind[],
+  targetAreas: string[],
+  defaults: ExerciseDefaults,
+  bikeTourPurpose: BikeTourPurpose[],
+  description: string,
+): ExerciseSeed => ({
+  id,
+  name,
+  group,
+  equipment,
+  targetAreas,
+  defaults,
+  bikeTourPurpose,
+  difficulty: 'beginner',
+  description,
+  instructions: [
+    `Set up for ${name} with a stable, comfortable position.`,
+    'Brace lightly, move through a controlled range, and keep breathing.',
+    'Stop the set when form changes or discomfort appears.',
+  ],
+  formCues: ['Move deliberately', 'Keep joints stacked', 'Use a range you can control', 'Leave 1-2 reps in reserve'],
+  commonMistakes: ['Rushing reps', 'Chasing range before control', 'Holding breath', 'Ignoring soreness signals'],
+})
+
+const extraExerciseSeeds: ExerciseSeed[] = [
+  quickExercise('front-plank', 'front plank', 'Core', ['bodyweight', 'yoga mat'], ['core', 'shoulders'], { sets: 3, durationSeconds: 30 }, ['anti-extension'], 'Anti-extension core endurance for long seated climbs.'),
+  quickExercise('pallof-press', 'Pallof press', 'Core', ['band'], ['obliques', 'core'], { sets: 3, reps: '10 each side' }, ['anti-rotation'], 'Band anti-rotation work for loaded-bike stability.'),
+  quickExercise('mcgill-curl-up', 'McGill curl-up', 'Core', ['bodyweight', 'yoga mat'], ['core', 'back'], { sets: 2, reps: '6 each side' }, ['anti-extension'], 'Back-friendly core stiffness drill.'),
+  quickExercise('hollow-hold', 'hollow hold', 'Core', ['bodyweight', 'yoga mat'], ['core', 'hip flexors'], { sets: 3, durationSeconds: 20 }, ['anti-extension'], 'Progression from dead bugs for trunk endurance.'),
+  quickExercise('bear-crawl-hold', 'bear crawl hold', 'Core', ['bodyweight', 'yoga mat'], ['core', 'shoulders', 'hips'], { sets: 3, durationSeconds: 20 }, ['anti-rotation'], 'Quadruped core stiffness and shoulder support.'),
+  quickExercise('band-face-pull', 'band face pull', 'Back and Posture', ['band'], ['upper back', 'rear delts'], { sets: 3, reps: '15' }, ['upper back'], 'Upper-back and shoulder posture work for cycling position.'),
+  quickExercise('band-external-rotation', 'band external rotation', 'Back and Posture', ['band'], ['rotator cuff', 'shoulders'], { sets: 2, reps: '12 each side' }, ['upper back'], 'Light shoulder prehab for healthy pulling and posture.'),
+  quickExercise('prone-y-t-w', 'prone Y-T-W', 'Back and Posture', ['bodyweight', 'yoga mat'], ['upper back', 'shoulders'], { sets: 2, reps: '6 each shape' }, ['upper back'], 'Low-load scapular control series.'),
+  quickExercise('scapular-push-up', 'scapular push-up', 'Back and Posture', ['bodyweight'], ['serratus', 'shoulders'], { sets: 2, reps: '10' }, ['upper back'], 'Shoulder blade control for pressing and riding posture.'),
+  quickExercise('chest-supported-dumbbell-row', 'chest-supported dumbbell row', 'Back and Posture', ['dumbbell', 'chair'], ['upper back', 'lats'], { sets: 3, reps: '10' }, ['upper back'], 'Supported row option when a bench or sturdy chair is available.'),
+  quickExercise('reverse-lunge', 'reverse lunge', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell'], ['glutes', 'quads'], { sets: 3, reps: '8 each leg' }, ['hill climbing'], 'Single-leg strength for steep hill starts and climbs.'),
+  quickExercise('lateral-lunge', 'lateral lunge', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell'], ['adductors', 'glutes'], { sets: 2, reps: '8 each side' }, ['hill climbing'], 'Side-to-side hip strength for uneven gravel and handling.'),
+  quickExercise('calf-raise', 'calf raise', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell'], ['calves'], { sets: 3, reps: '12' }, ['hill climbing'], 'Calf capacity for standing efforts and long climbs.'),
+  quickExercise('soleus-raise', 'soleus raise', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell', 'chair'], ['soleus', 'calves'], { sets: 3, reps: '15' }, ['hill climbing'], 'Bent-knee calf work for climbing endurance.'),
+  quickExercise('wall-sit', 'wall sit', 'Legs and Hill Climbing', ['bodyweight'], ['quads', 'glutes'], { sets: 3, durationSeconds: 30 }, ['hill climbing'], 'Quad endurance for sustained grades.'),
+  quickExercise('single-leg-romanian-deadlift', 'single-leg Romanian deadlift', 'Hinge and Posterior Chain', ['bodyweight', 'dumbbell'], ['hamstrings', 'glutes', 'balance'], { sets: 3, reps: '8 each side' }, ['posterior chain'], 'Single-leg hinge control for hips and back durability.'),
+  quickExercise('box-squat-to-chair', 'box squat to chair', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell', 'chair'], ['quads', 'glutes'], { sets: 3, reps: '8' }, ['hill climbing'], 'Squat strength with a consistent depth target.'),
+  quickExercise('couch-stretch', 'couch stretch', 'Mobility and Yoga', ['bodyweight', 'yoga mat'], ['hip flexors', 'quads'], { durationSeconds: 60 }, ['mobility'], 'Deep hip-flexor and quad opener after rides.'),
+  quickExercise('downward-dog', 'downward dog', 'Mobility and Yoga', ['bodyweight', 'yoga mat'], ['calves', 'hamstrings', 'shoulders'], { durationSeconds: 60 }, ['mobility'], 'Posterior chain and shoulder mobility reset.'),
+  quickExercise('90-90-hip-switch', '90/90 hip switch', 'Mobility and Yoga', ['bodyweight', 'yoga mat'], ['hips'], { sets: 2, reps: '8 each side' }, ['mobility'], 'Hip rotation mobility for saddle comfort.'),
+  quickExercise('ankle-rocks', 'ankle dorsiflexion rocks', 'Mobility and Yoga', ['bodyweight'], ['ankles', 'calves'], { sets: 2, reps: '10 each side' }, ['mobility'], 'Ankle mobility for squats, stairs, and hike-a-bike moments.'),
+  quickExercise('standing-calf-stretch', 'standing calf stretch', 'Mobility and Yoga', ['bodyweight'], ['calves'], { durationSeconds: 60 }, ['mobility', 'recovery'], 'Simple calf recovery after hills.'),
+  quickExercise('thoracic-extension-roller', 'thoracic extension over rolled towel', 'Mobility and Yoga', ['foam roller', 'yoga mat'], ['thoracic spine', 'chest'], { durationSeconds: 60 }, ['mobility'], 'Upper-back extension to counter riding posture.'),
+  quickExercise('easy-endurance-ride', 'easy endurance ride', 'Bike and Outdoor Conditioning', ['bike'], ['aerobic base'], { durationSeconds: 3600, distance: '10 mi', effort: 4 }, ['ride conditioning'], 'Comfortable endurance riding for aerobic base.'),
+  quickExercise('hill-repeat-ride', 'hill repeat ride', 'Bike and Outdoor Conditioning', ['bike'], ['quads', 'glutes', 'lungs'], { durationSeconds: 2700, effort: 8 }, ['hill climbing'], 'Short controlled hill repeats around Harrisonburg-style grades.'),
+  quickExercise('low-cadence-climb-intervals', 'low-cadence climb intervals', 'Bike and Outdoor Conditioning', ['bike'], ['glutes', 'quads', 'core'], { durationSeconds: 2400, effort: 7 }, ['hill climbing'], 'Low-cadence hill strength intervals without sprinting.'),
+  quickExercise('loaded-gravel-ride', 'loaded gravel ride', 'Bike and Outdoor Conditioning', ['bike'], ['aerobic base', 'trunk'], { durationSeconds: 5400, distance: '20 mi', effort: 6 }, ['loaded-bike durability'], 'Practice handling and pacing with bags or load.'),
+  quickExercise('recovery-spin', 'recovery spin', 'Recovery and Prehab', ['bike'], ['recovery'], { durationSeconds: 1800, effort: 2 }, ['recovery'], 'Easy spin to move blood without adding fatigue.'),
+  quickExercise('walk-hike', 'walk/hike', 'Bike and Outdoor Conditioning', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 2700, effort: 3 }, ['ride conditioning'], 'Low-stress outdoor conditioning for busy weeks.'),
+  quickExercise('burley-loaded-trailer-ride', 'Burley loaded trailer ride', 'Bike and Outdoor Conditioning', ['bike', 'trailer'], ['aerobic base', 'trunk', 'handling'], { durationSeconds: 2700, distance: '8 mi', effort: 5 }, ['trailer handling', 'loaded-bike durability'], 'Gentle trailer conditioning with dog comfort as the first constraint.'),
+]
+
+export const seedExercises = [...exerciseSeeds, ...extraExerciseSeeds].map(makeExercise)
+
+export const seedExerciseMedia: ExerciseMedia[] = seedExercises.map((exercise) => ({
+  id: `media-${exercise.id}-offline-motion`,
+  exerciseId: exercise.id,
+  type: 'svg-animation',
+  localSvgKey: exercise.id,
+  sourceName: 'RampRep',
+  attributionText: 'Original RampRep SVG/CSS animation, offline capable.',
+  importedAt: seedTimestamp,
+  isOfflineCapable: true,
+  isTrusted: true,
+}))
 
 const routineBase = (id: string, name: string, type: Routine['type'], order: number, estimatedMinutes: number, notes?: string): Routine => ({
   id,
@@ -550,6 +629,7 @@ export const seedRoutines: Routine[] = [
   routineBase('routine-c-conditioning-circuit', 'Conditioning Circuit', 'conditioning', 3, 30, '4-6 controlled rounds with 60-90 seconds rest. Choose swing only when hinge form is crisp.'),
   routineBase('routine-d-10-minute-mat-mobility', '10-Minute Mat Mobility', 'mobility', 4, 10),
   routineBase('routine-e-recovery-core-back', 'Recovery Core and Back', 'recovery', 5, 20),
+  routineBase('routine-f-burley-loaded-trailer-ride', 'Burley Loaded Trailer Ride', 'bike', 6, 60, 'Conditioning ride with dog comfort as mandatory. Start with empty trailer practice before dog-loaded rides. Avoid heat, traffic, excessive speed, and hard hill repeats with the dog.'),
 ]
 
 const exerciseIdByName = new Map(seedExercises.map((exercise) => [exercise.name, exercise.id]))
@@ -609,6 +689,11 @@ export const seedRoutineExercises: RoutineExercise[] = [
   routineExercise('routine-e-recovery-core-back', 'glute bridge', 'recovery', 4, { sets: 2, reps: '12' }),
   routineExercise('routine-e-recovery-core-back', 'thoracic open book', 'recovery', 5, { reps: '8 each side', side: 'each' }),
   routineExercise('routine-e-recovery-core-back', "child's pose with side reach", 'recovery', 6, { durationSeconds: 60 }),
+
+  routineExercise('routine-f-burley-loaded-trailer-ride', 'Burley loaded trailer ride', 'precheck', 1, { notes: 'Pre-check tires, hitch, leash/harness, water, route, weather, and dog comfort.' }),
+  routineExercise('routine-f-burley-loaded-trailer-ride', 'easy endurance ride', 'warmup', 2, { durationSeconds: 600, notes: '10 min easy warmup before adding any climbing.' }),
+  routineExercise('routine-f-burley-loaded-trailer-ride', 'Burley loaded trailer ride', 'ride', 3, { durationSeconds: 2700, distance: '8 mi', notes: '20-45 min easy loaded ride. Optional 3-5 gentle climbs only if dog is comfortable.' }),
+  routineExercise('routine-f-burley-loaded-trailer-ride', 'recovery spin', 'cooldown', 4, { durationSeconds: 600, notes: '5-10 min cooldown and dog comfort check.' }),
 ]
 
 export const seedEquipment: Equipment[] = [
@@ -643,6 +728,34 @@ export const seedSchedule: SchedulePreference = {
   },
   temporaryChanges: [],
   travelMode: false,
+  busyWorkWeek: false,
+  hillFocusWeek: false,
+  recoveryWeek: false,
   deloadEveryFourthWeek: true,
   updatedAt: seedTimestamp,
+}
+
+export const seedRoadmap: TourRoadmap = {
+  id: 'default',
+  updatedAt: seedTimestamp,
+  phases: [
+    { id: 'phase-foundation', title: 'Foundation', months: 'Months 1-3', order: 1, focus: ['build consistency', 'core/back durability', 'hip/glute strength', 'mobility habit', 'easy rides and walks'] },
+    { id: 'phase-hill-strength', title: 'Hill Strength', months: 'Months 4-6', order: 2, focus: ['step-ups', 'split squats', 'loaded carries', 'low-cadence hill riding', 'longer weekend rides'] },
+    { id: 'phase-loaded-gravel', title: 'Loaded Gravel Conditioning', months: 'Months 7-9', order: 3, focus: ['longer rides', 'back-to-back ride days', 'practice with bags/trailer/load', 'Harrisonburg hill routes', 'recovery routines'] },
+    { id: 'phase-tour-simulation', title: 'Tour Simulation', months: 'Months 10-11', order: 4, focus: ['multi-hour rides', 'back-to-back long days', 'loaded climbs', 'nutrition/hydration notes', 'soreness tracking'] },
+    { id: 'phase-taper', title: 'Taper and Maintenance', months: 'Month 12', order: 5, focus: ['reduce volume', 'preserve mobility and core', 'short sharp hill efforts', 'bike fit/equipment checklist'] },
+  ],
+  milestones: [
+    { id: 'mile-foundation-1', phaseId: 'phase-foundation', title: 'Complete 3 consistent weeks', description: 'Hit the planned weekly frequency without forcing missed days.', targetMonth: 1, order: 1, completed: false },
+    { id: 'mile-foundation-2', phaseId: 'phase-foundation', title: 'Own the core baseline', description: 'Dead bug, bird dog, side plank, and glute bridge feel crisp.', targetMonth: 2, order: 2, completed: false },
+    { id: 'mile-foundation-3', phaseId: 'phase-foundation', title: 'Mobility habit is automatic', description: 'Use 10-minute mat mobility at least twice per week.', targetMonth: 3, order: 3, completed: false },
+    { id: 'mile-hills-1', phaseId: 'phase-hill-strength', title: 'Hill strength week', description: 'Add step-ups, split squats, and low-cadence climbing in the same week.', targetMonth: 4, order: 4, completed: false },
+    { id: 'mile-hills-2', phaseId: 'phase-hill-strength', title: 'Longer weekend ride', description: 'Build a sustainable weekend ride without back or hip flare-ups.', targetMonth: 6, order: 5, completed: false },
+    { id: 'mile-loaded-1', phaseId: 'phase-loaded-gravel', title: 'Loaded handling practice', description: 'Ride with bags, load, or empty trailer on mixed surface.', targetMonth: 7, order: 6, completed: false },
+    { id: 'mile-loaded-2', phaseId: 'phase-loaded-gravel', title: 'Back-to-back ride days', description: 'Two consecutive ride days with recovery routine afterward.', targetMonth: 9, order: 7, completed: false },
+    { id: 'mile-sim-1', phaseId: 'phase-tour-simulation', title: 'Tour simulation weekend', description: 'Multi-hour loaded ride plus next-day endurance ride.', targetMonth: 10, order: 8, completed: false },
+    { id: 'mile-sim-2', phaseId: 'phase-tour-simulation', title: 'Nutrition and soreness notes', description: 'Track fueling, hydration, soreness, and recovery after long efforts.', targetMonth: 11, order: 9, completed: false },
+    { id: 'mile-taper-1', phaseId: 'phase-taper', title: 'Equipment and bike fit check', description: 'Confirm fit, bags/trailer, lights, bottles, repair kit, and comfort items.', targetMonth: 12, order: 10, completed: false },
+  ],
+  conflicts: [],
 }
