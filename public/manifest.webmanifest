@@ -2,15 +2,15 @@
   "name": "RampRep",
   "short_name": "RampRep",
   "description": "Local-first workout tracking for home strength, mobility, conditioning, and bike tour preparation.",
-  "start_url": ".",
-  "scope": ".",
+  "start_url": "/ramprep/",
+  "scope": "/ramprep/",
   "display": "standalone",
   "background_color": "#f5f3ee",
   "theme_color": "#1f6f78",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "./pwa-icon.svg",
+      "src": "/ramprep/pwa-icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

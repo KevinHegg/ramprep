@@ -7,11 +7,15 @@ export type EquipmentKind =
   | 'band'
   | 'yoga mat'
   | 'carry'
+  | 'bike'
+  | 'trailer'
+  | 'chair'
+  | 'foam roller'
   | 'suspension trainer'
   | 'pull-up bar'
 
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced'
-export type RoutineType = 'strength' | 'conditioning' | 'mobility' | 'recovery'
+export type RoutineType = 'strength' | 'conditioning' | 'mobility' | 'recovery' | 'bike'
 export type WorkoutStatus = 'completed' | 'skipped'
 export type SkipReason =
   | 'work'
@@ -29,7 +33,31 @@ export interface ExerciseDefaults {
   durationSeconds?: number
   distance?: string
   weight?: number
+  effort?: number
 }
+
+export type ExerciseGroup =
+  | 'Core'
+  | 'Back and Posture'
+  | 'Hinge and Posterior Chain'
+  | 'Legs and Hill Climbing'
+  | 'Carries and Loaded Conditioning'
+  | 'Mobility and Yoga'
+  | 'Bike and Outdoor Conditioning'
+  | 'Recovery and Prehab'
+
+export type BikeTourPurpose =
+  | 'anti-extension'
+  | 'anti-rotation'
+  | 'lateral stability'
+  | 'upper back'
+  | 'posterior chain'
+  | 'hill climbing'
+  | 'loaded-bike durability'
+  | 'mobility'
+  | 'recovery'
+  | 'ride conditioning'
+  | 'trailer handling'
 
 export interface Exercise {
   id: ID
@@ -41,6 +69,8 @@ export interface Exercise {
   targetAreas: string[]
   equipment: EquipmentKind[]
   difficulty: Difficulty
+  group?: ExerciseGroup
+  bikeTourPurpose?: BikeTourPurpose[]
   defaults: ExerciseDefaults
   videoUrl?: string
   imageUrl?: string
@@ -65,7 +95,7 @@ export interface RoutineExercise {
   id: ID
   routineId: ID
   exerciseId: ID
-  section: 'warmup' | 'main' | 'circuit' | 'mobility' | 'recovery'
+  section: 'warmup' | 'main' | 'circuit' | 'mobility' | 'recovery' | 'precheck' | 'ride' | 'cooldown'
   order: number
   sets?: number
   reps?: string
@@ -90,6 +120,7 @@ export interface ExerciseLogEntry {
   distance?: string
   effort?: number
   notes?: string
+  customFields?: Record<string, string | number | boolean | undefined>
 }
 
 export interface WorkoutLog {
@@ -142,7 +173,74 @@ export interface SchedulePreference {
   dayAssignments: Record<string, ID>
   temporaryChanges: TemporaryScheduleChange[]
   travelMode: boolean
+  busyWorkWeek: boolean
+  hillFocusWeek: boolean
+  recoveryWeek: boolean
   deloadEveryFourthWeek: boolean
+  updatedAt: string
+}
+
+export interface PersonalExerciseDefault extends ExerciseDefaults {
+  id: ID
+  exerciseId: ID
+  updatedAt: string
+  source: 'user' | 'last-log'
+  reuseLastNote?: boolean
+  noteTemplate?: string
+}
+
+export type ExerciseMediaType = 'svg-animation' | 'wger-video' | 'wger-image' | 'youtube-link' | 'external-link'
+
+export interface ExerciseMedia {
+  id: ID
+  exerciseId: ID
+  type: ExerciseMediaType
+  url?: string
+  thumbnailUrl?: string
+  localSvgKey?: string
+  sourceName: string
+  sourceUrl?: string
+  author?: string
+  licenseName?: string
+  licenseUrl?: string
+  attributionText: string
+  importedAt: string
+  isOfflineCapable: boolean
+  isTrusted: boolean
+}
+
+export interface RoadmapMilestone {
+  id: ID
+  phaseId: ID
+  title: string
+  description: string
+  targetMonth: number
+  order: number
+  completed: boolean
+  completedAt?: string
+}
+
+export interface RoadmapConflict {
+  id: ID
+  startsOn: string
+  endsOn: string
+  note: string
+  lighterWeekSuggested: boolean
+}
+
+export interface RoadmapPhase {
+  id: ID
+  title: string
+  months: string
+  focus: string[]
+  order: number
+}
+
+export interface TourRoadmap {
+  id: 'default'
+  phases: RoadmapPhase[]
+  milestones: RoadmapMilestone[]
+  conflicts: RoadmapConflict[]
   updatedAt: string
 }
 
@@ -152,6 +250,9 @@ export interface AppData {
   routineExercises: RoutineExercise[]
   workoutLogs: WorkoutLog[]
   exerciseLogEntries: ExerciseLogEntry[]
+  personalExerciseDefaults: PersonalExerciseDefault[]
+  exerciseMedia: ExerciseMedia[]
+  roadmap: TourRoadmap
   settings: UserSettings
   equipment: Equipment[]
   schedule: SchedulePreference
@@ -168,4 +269,6 @@ export interface WorkoutDraftEntry {
   distance?: string
   effort?: number
   notes?: string
+  lastSummary?: string
+  customFields?: Record<string, string | number | boolean | undefined>
 }
