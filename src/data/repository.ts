@@ -11,9 +11,14 @@ import {
 } from './seed'
 import type {
   AppData,
+  CarbEntry,
+  CarbGoalHistory,
+  CarbPreset,
+  CarbSettings,
   Equipment,
   Exercise,
   ExerciseLogEntry,
+  FoodLookupCache,
   Routine,
   RoutineExercise,
   SchedulePreference,
@@ -23,6 +28,8 @@ import type {
   WorkoutDraftEntry,
   WorkoutLog,
 } from '../types'
+import { defaultCarbSettings, normalizeCarbGrams } from '../utils/carbs'
+import { toDateKey } from '../utils/date'
 import { mostRecentCompletedEntry, resolveExerciseLogDefaults } from '../utils/defaults'
 
 const nowIso = () => new Date().toISOString()
@@ -35,13 +42,22 @@ export const createId = (prefix: string) => {
   return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+const defaultCarbGoalHistory = (timestamp: string): CarbGoalHistory => ({
+  id: 'carb-goal-initial',
+  effectiveDateISO: toDateKey(new Date(timestamp)),
+  goalGrams: 50,
+  createdAt: timestamp,
+})
+
 export const initializeAppData = async () => {
   const settings = await db.settings.get('default')
   if (settings) {
     await ensureV11Seeds()
+    await ensureV13CarbDefaults()
     return
   }
 
+  const timestamp = nowIso()
   await db.transaction(
     'rw',
     [
@@ -53,18 +69,39 @@ export const initializeAppData = async () => {
       db.schedulePreferences,
       db.exerciseMedia,
       db.tourRoadmaps,
+      db.carbSettings,
+      db.carbGoalHistory,
     ],
     async () => {
-      await db.exercises.bulkAdd(seedExercises)
-      await db.routines.bulkAdd(seedRoutines)
-      await db.routineExercises.bulkAdd(seedRoutineExercises)
-      await db.settings.add({ ...seedSettings, seededAt: nowIso(), updatedAt: nowIso() })
-      await db.equipment.bulkAdd(seedEquipment)
-      await db.schedulePreferences.add({ ...seedSchedule, updatedAt: nowIso() })
-      await db.exerciseMedia.bulkAdd(seedExerciseMedia)
-      await db.tourRoadmaps.add({ ...seedRoadmap, updatedAt: nowIso() })
+      await db.exercises.bulkPut(seedExercises)
+      await db.routines.bulkPut(seedRoutines)
+      await db.routineExercises.bulkPut(seedRoutineExercises)
+      await db.settings.put({ ...seedSettings, seededAt: timestamp, updatedAt: timestamp })
+      await db.equipment.bulkPut(seedEquipment)
+      await db.schedulePreferences.put({ ...seedSchedule, updatedAt: timestamp })
+      await db.exerciseMedia.bulkPut(seedExerciseMedia)
+      await db.tourRoadmaps.put({ ...seedRoadmap, updatedAt: timestamp })
+      await db.carbSettings.put(defaultCarbSettings(timestamp))
+      await db.carbGoalHistory.put(defaultCarbGoalHistory(timestamp))
     },
   )
+}
+
+export const ensureV13CarbDefaults = async () => {
+  const timestamp = nowIso()
+  const [settings, history] = await Promise.all([
+    db.carbSettings.get('default'),
+    db.carbGoalHistory.orderBy('effectiveDateISO').first(),
+  ])
+
+  await db.transaction('rw', [db.carbSettings, db.carbGoalHistory], async () => {
+    if (!settings) {
+      await db.carbSettings.add(defaultCarbSettings(timestamp))
+    }
+    if (!history) {
+      await db.carbGoalHistory.add(defaultCarbGoalHistory(timestamp))
+    }
+  })
 }
 
 export const ensureV11Seeds = async () => {
@@ -148,8 +185,14 @@ export const resetDemoData = async () => {
       db.personalExerciseDefaults,
       db.exerciseMedia,
       db.tourRoadmaps,
+      db.carbEntries,
+      db.carbSettings,
+      db.carbGoalHistory,
+      db.carbPresets,
+      db.foodLookupCache,
     ],
     async () => {
+      const timestamp = nowIso()
       await Promise.all([
         db.exercises.clear(),
         db.routines.clear(),
@@ -162,16 +205,23 @@ export const resetDemoData = async () => {
         db.personalExerciseDefaults.clear(),
         db.exerciseMedia.clear(),
         db.tourRoadmaps.clear(),
+        db.carbEntries.clear(),
+        db.carbSettings.clear(),
+        db.carbGoalHistory.clear(),
+        db.carbPresets.clear(),
+        db.foodLookupCache.clear(),
       ])
 
       await db.exercises.bulkAdd(seedExercises)
       await db.routines.bulkAdd(seedRoutines)
       await db.routineExercises.bulkAdd(seedRoutineExercises)
-      await db.settings.add({ ...seedSettings, seededAt: nowIso(), updatedAt: nowIso() })
+      await db.settings.add({ ...seedSettings, seededAt: timestamp, updatedAt: timestamp })
       await db.equipment.bulkAdd(seedEquipment)
-      await db.schedulePreferences.add({ ...seedSchedule, updatedAt: nowIso() })
+      await db.schedulePreferences.add({ ...seedSchedule, updatedAt: timestamp })
       await db.exerciseMedia.bulkAdd(seedExerciseMedia)
-      await db.tourRoadmaps.add({ ...seedRoadmap, updatedAt: nowIso() })
+      await db.tourRoadmaps.add({ ...seedRoadmap, updatedAt: timestamp })
+      await db.carbSettings.add(defaultCarbSettings(timestamp))
+      await db.carbGoalHistory.add(defaultCarbGoalHistory(timestamp))
     },
   )
 }
@@ -189,6 +239,11 @@ export const getAppData = async (): Promise<AppData> => {
     settings,
     equipment,
     schedule,
+    carbEntries,
+    carbSettings,
+    carbGoalHistory,
+    carbPresets,
+    foodLookupCache,
   ] = await Promise.all([
     db.exercises.orderBy('name').toArray(),
     db.routines.orderBy('order').toArray(),
@@ -201,9 +256,14 @@ export const getAppData = async (): Promise<AppData> => {
     db.settings.get('default'),
     db.equipment.toArray(),
     db.schedulePreferences.get('default'),
+    db.carbEntries.orderBy('createdAt').reverse().toArray(),
+    db.carbSettings.get('default'),
+    db.carbGoalHistory.orderBy('effectiveDateISO').toArray(),
+    db.carbPresets.toArray(),
+    db.foodLookupCache.toArray(),
   ])
 
-  if (!settings || !schedule || !roadmap) {
+  if (!settings || !schedule || !roadmap || !carbSettings) {
     await initializeAppData()
     return getAppData()
   }
@@ -220,6 +280,11 @@ export const getAppData = async (): Promise<AppData> => {
     settings,
     equipment,
     schedule,
+    carbEntries,
+    carbSettings,
+    carbGoalHistory,
+    carbPresets,
+    foodLookupCache,
   }
 }
 
@@ -283,6 +348,111 @@ export const duplicateRoutine = async (routineId: string) => {
 
 export const saveSettings = async (settings: UserSettings) => {
   await db.settings.put({ ...settings, updatedAt: nowIso() })
+}
+
+export const saveCarbSettings = async (settings: CarbSettings, effectiveDateISO = toDateKey(new Date())) => {
+  const timestamp = nowIso()
+  const previous = await db.carbSettings.get('default')
+  const next: CarbSettings = {
+    ...settings,
+    dailyNetCarbGoalGrams: normalizeCarbGrams(settings.dailyNetCarbGoalGrams),
+    updatedAt: timestamp,
+  }
+
+  await db.transaction('rw', db.carbSettings, db.carbGoalHistory, async () => {
+    await db.carbSettings.put(next)
+    if (!previous || previous.dailyNetCarbGoalGrams !== next.dailyNetCarbGoalGrams) {
+      await db.carbGoalHistory.put({
+        id: `carb-goal-${effectiveDateISO}`,
+        effectiveDateISO,
+        goalGrams: next.dailyNetCarbGoalGrams,
+        createdAt: timestamp,
+      })
+    }
+  })
+}
+
+export const createCarbEntry = async (
+  entry: Omit<CarbEntry, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: string; updatedAt?: string },
+) => {
+  const timestamp = nowIso()
+  const carbEntry: CarbEntry = {
+    ...entry,
+    id: createId('carb-entry'),
+    netCarbs: normalizeCarbGrams(entry.netCarbs),
+    createdAt: entry.createdAt ?? timestamp,
+    updatedAt: entry.updatedAt ?? timestamp,
+  }
+  await db.carbEntries.add(carbEntry)
+  return carbEntry
+}
+
+export const updateCarbEntry = async (entry: CarbEntry) => {
+  await db.carbEntries.put({ ...entry, netCarbs: normalizeCarbGrams(entry.netCarbs), updatedAt: nowIso() })
+}
+
+export const deleteCarbEntry = async (id: string) => {
+  await db.carbEntries.delete(id)
+}
+
+export const deleteAllCarbEntries = async () => {
+  await db.carbEntries.clear()
+}
+
+export const saveCarbPreset = async (
+  preset: Omit<CarbPreset, 'id' | 'createdAt' | 'updatedAt' | 'useCount'> & { id?: string; useCount?: number },
+) => {
+  const timestamp = nowIso()
+  const existing = preset.id ? await db.carbPresets.get(preset.id) : undefined
+  const next: CarbPreset = {
+    ...preset,
+    id: preset.id ?? createId('carb-preset'),
+    netCarbs: normalizeCarbGrams(preset.netCarbs),
+    useCount: preset.useCount ?? existing?.useCount ?? 0,
+    createdAt: existing?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  }
+
+  await db.carbPresets.put(next)
+  return next
+}
+
+export const markCarbPresetUsed = async (preset: CarbPreset) => {
+  const timestamp = nowIso()
+  await db.carbPresets.put({
+    ...preset,
+    useCount: (preset.useCount ?? 0) + 1,
+    lastUsedAt: timestamp,
+    updatedAt: timestamp,
+  })
+}
+
+export const deleteCarbPreset = async (id: string) => {
+  await db.carbPresets.delete(id)
+}
+
+export const getFoodLookupCache = async (source: FoodLookupCache['source'], queryOrSourceId: string) => {
+  const id = `${source}-${queryOrSourceId.trim().toLowerCase()}`
+  const cached = await db.foodLookupCache.get(id)
+  if (!cached || cached.expiresAt < nowIso()) {
+    return undefined
+  }
+  return cached
+}
+
+export const saveFoodLookupCache = async (
+  source: FoodLookupCache['source'],
+  queryOrSourceId: string,
+  resultJson: string,
+) => {
+  const timestamp = nowIso()
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString()
+  const id = `${source}-${queryOrSourceId.trim().toLowerCase()}`
+  await db.foodLookupCache.put({ id, source, queryOrSourceId, resultJson, cachedAt: timestamp, expiresAt })
+}
+
+export const clearFoodLookupCache = async () => {
+  await db.foodLookupCache.clear()
 }
 
 export const saveSchedule = async (schedule: SchedulePreference) => {
@@ -400,9 +570,27 @@ export const deleteWorkoutLog = async (logId: string) => {
   })
 }
 
-export const exportAllData = async () => {
+const sanitizeCarbSettingsForExport = (settings: CarbSettings, includePrivateSettings = false): CarbSettings => ({
+  ...settings,
+  foodDataCentralApiKey: includePrivateSettings ? settings.foodDataCentralApiKey : undefined,
+})
+
+export const exportAllData = async (options: { includePrivateSettings?: boolean } = {}) => {
   const data = await getAppData()
-  return JSON.stringify({ schemaVersion: 1, exportedAt: nowIso(), data }, null, 2)
+  return JSON.stringify(
+    {
+      schemaVersion: 2,
+      exportedAt: nowIso(),
+      privateSettingsIncluded: Boolean(options.includePrivateSettings),
+      data: {
+        ...data,
+        carbSettings: sanitizeCarbSettingsForExport(data.carbSettings, options.includePrivateSettings),
+        foodLookupCache: [],
+      },
+    },
+    null,
+    2,
+  )
 }
 
 export const importAllData = async (rawJson: string) => {
@@ -427,8 +615,14 @@ export const importAllData = async (rawJson: string) => {
       db.personalExerciseDefaults,
       db.exerciseMedia,
       db.tourRoadmaps,
+      db.carbEntries,
+      db.carbSettings,
+      db.carbGoalHistory,
+      db.carbPresets,
+      db.foodLookupCache,
     ],
     async () => {
+      const timestamp = nowIso()
       await Promise.all([
         db.exercises.clear(),
         db.routines.clear(),
@@ -441,6 +635,11 @@ export const importAllData = async (rawJson: string) => {
         db.personalExerciseDefaults.clear(),
         db.exerciseMedia.clear(),
         db.tourRoadmaps.clear(),
+        db.carbEntries.clear(),
+        db.carbSettings.clear(),
+        db.carbGoalHistory.clear(),
+        db.carbPresets.clear(),
+        db.foodLookupCache.clear(),
       ])
 
       await db.exercises.bulkAdd(data.exercises)
@@ -454,6 +653,13 @@ export const importAllData = async (rawJson: string) => {
       await db.settings.add(data.settings)
       await db.equipment.bulkAdd(data.equipment ?? [])
       await db.schedulePreferences.add(data.schedule)
+      await db.carbEntries.bulkAdd(data.carbEntries ?? [])
+      await db.carbSettings.add(data.carbSettings ?? defaultCarbSettings(timestamp))
+      await db.carbGoalHistory.bulkAdd(
+        data.carbGoalHistory?.length ? data.carbGoalHistory : [defaultCarbGoalHistory(timestamp)],
+      )
+      await db.carbPresets.bulkAdd(data.carbPresets ?? [])
+      await db.foodLookupCache.bulkAdd(data.foodLookupCache ?? [])
     },
   )
 }
@@ -488,6 +694,29 @@ export const exportWorkoutLogsCsv = async () => {
         entry.notes ?? log.notes ?? '',
       ])
     }),
+  ]
+
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n')
+}
+
+export const exportCarbEntriesCsv = async () => {
+  const { carbEntries } = await getAppData()
+  const rows = [
+    ['date', 'mealSlot', 'netCarbs', 'sourceType', 'sourceLabel', 'savedFoodName', 'goalGramsAtEntry', 'createdAt', 'updatedAt'],
+    ...carbEntries
+      .slice()
+      .sort((a, b) => `${a.dateISO}-${a.createdAt}`.localeCompare(`${b.dateISO}-${b.createdAt}`))
+      .map((entry) => [
+        entry.dateISO,
+        entry.mealSlot,
+        entry.netCarbs,
+        entry.sourceType,
+        entry.sourceLabel ?? '',
+        entry.savedFoodName ?? '',
+        entry.goalGramsAtEntry,
+        entry.createdAt,
+        entry.updatedAt,
+      ]),
   ]
 
   return rows.map((row) => row.map(csvCell).join(',')).join('\n')

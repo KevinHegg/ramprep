@@ -29,25 +29,37 @@ import {
 import './App.css'
 import {
   addExerciseToRoutine,
+  clearFoodLookupCache,
+  createCarbEntry,
   createSkippedWorkout,
   createWorkoutLog,
   createId,
+  deleteAllCarbEntries,
+  deleteCarbEntry,
+  deleteCarbPreset,
   deleteRoutineExercise,
   deleteWorkoutLog,
   duplicateRoutine,
   exportAllData,
+  exportCarbEntriesCsv,
   exportWorkoutLogsCsv,
+  getFoodLookupCache,
   getAppData,
   importAllData,
   initializeAppData,
+  markCarbPresetUsed,
   resetDemoData,
+  saveCarbPreset,
+  saveCarbSettings,
   saveEquipment,
   saveExercise,
+  saveFoodLookupCache,
   saveRoutine,
   saveRoutineExercise,
   saveRoadmap,
   saveSchedule,
   saveSettings,
+  updateCarbEntry,
   updateWorkoutLog,
 } from './data/repository'
 import {
@@ -68,13 +80,30 @@ import {
   getScheduledRoutineForDate,
   isDeloadWeek,
 } from './utils/schedule'
-import { formatShortDate } from './utils/date'
+import { formatShortDate, toDateKey } from './utils/date'
 import { firstNumber, mostRecentCompletedEntry, resolveExerciseLogDefaults } from './utils/defaults'
 import { functionalCategories, getExerciseCategory, type FunctionalCategory } from './utils/exerciseCategories'
+import {
+  buildCarbReports,
+  carbMealSlotLabels,
+  carbMealSlots,
+  carbQuickPicks,
+  goalForDate,
+  normalizeCarbGrams,
+  sortedCarbPresets,
+  sourceLabels,
+  totalCarbsByMeal,
+} from './utils/carbs'
 import { validateGoogleAppsScriptUrl } from './services/googleSheetsSync'
+import { searchOpenFoodFacts, openFoodFactsWarning } from './services/foodLookup/openFoodFacts'
+import { getUsdaFoodDetails, searchUsdaFoods } from './services/foodLookup/usdaFoodDataCentral'
+import type { FoodLookupResult, FoodLookupSource } from './services/foodLookup/types'
 import type {
   AppData,
   BikeTourPurpose,
+  CarbEntry,
+  CarbMealSlot,
+  CarbSettings,
   EquipmentKind,
   Exercise,
   ExerciseGroup,
@@ -88,7 +117,7 @@ import type {
   WorkoutLog,
 } from './types'
 
-type Page = 'dashboard' | 'workouts' | 'log' | 'progress' | 'settings' | 'roadmap'
+type Page = 'dashboard' | 'workouts' | 'log' | 'carbs' | 'progress' | 'settings' | 'roadmap'
 type WorkoutsTab = 'routines' | 'library'
 type LogMode = 'recommended' | 'routine' | 'free'
 
@@ -96,8 +125,8 @@ const navItems: Array<{ page: Page; label: string; icon: typeof Activity }> = [
   { page: 'dashboard', label: 'Dashboard', icon: Activity },
   { page: 'workouts', label: 'Workouts', icon: Dumbbell },
   { page: 'log', label: 'Log', icon: ClipboardList },
+  { page: 'carbs', label: 'Carbs', icon: Flame },
   { page: 'progress', label: 'Progress', icon: BarChart3 },
-  { page: 'settings', label: 'Settings', icon: Settings },
 ]
 
 const skipReasons: SkipReason[] = ['work', 'travel', 'fatigue', 'soreness', 'illness', 'no time', 'other']
@@ -109,6 +138,7 @@ const emptyExercises: Exercise[] = []
 const emptyRoutineExercises: RoutineExercise[] = []
 const emptyLogs: WorkoutLog[] = []
 const emptyEntries: ExerciseLogEntry[] = []
+const emptyCarbEntries: CarbEntry[] = []
 
 const numberOrUndefined = (value: string) => {
   if (value === '') {
@@ -146,6 +176,17 @@ const formatDuration = (seconds?: number) => {
 
   const minutes = Math.round(seconds / 60)
   return `${minutes} min`
+}
+
+const carbStatusText = (total: number, goal: number) => {
+  const remaining = goal - total
+  if (remaining > 0) {
+    return `${remaining}g left`
+  }
+  if (remaining === 0) {
+    return 'Goal met'
+  }
+  return `Over by ${Math.abs(remaining)}g`
 }
 
 const prescription = (entry: RoutineExercise, exercise?: Exercise) => {
@@ -475,7 +516,21 @@ function App() {
   const [quickExerciseName, setQuickExerciseName] = useState('')
   const [editLog, setEditLog] = useState<{ log: WorkoutLog; entries: ExerciseLogEntry[] } | null>(null)
   const [settingsDraft, setSettingsDraft] = useState<UserSettings | null>(null)
+  const [carbSettingsDraft, setCarbSettingsDraft] = useState<CarbSettings | null>(null)
   const [scheduleDraft, setScheduleDraft] = useState<SchedulePreference | null>(null)
+  const [carbSelectedDate, setCarbSelectedDate] = useState(() => toDateKey(new Date()))
+  const [carbMealSlot, setCarbMealSlot] = useState<CarbMealSlot>('breakfast')
+  const [carbAmount, setCarbAmount] = useState(0)
+  const [addCarbRepeat, setAddCarbRepeat] = useState(false)
+  const [carbEditEntry, setCarbEditEntry] = useState<CarbEntry | null>(null)
+  const [presetDraft, setPresetDraft] = useState({ id: '', name: '', netCarbs: 0, servingDescription: '' })
+  const [lookupQuery, setLookupQuery] = useState('')
+  const [lookupSource, setLookupSource] = useState<FoodLookupSource>('usda')
+  const [lookupResults, setLookupResults] = useState<FoodLookupResult[]>([])
+  const [lookupSelected, setLookupSelected] = useState<FoodLookupResult | null>(null)
+  const [lookupOverride, setLookupOverride] = useState<number | undefined>()
+  const [lookupLoading, setLookupLoading] = useState(false)
+  const [lookupError, setLookupError] = useState('')
   const [temporaryChangeDraft, setTemporaryChangeDraft] = useState({
     startsOn: '',
     endsOn: '',
@@ -489,6 +544,10 @@ function App() {
     const snapshot = await getAppData()
     setData(snapshot)
     setSettingsDraft(snapshot.settings)
+    setCarbSettingsDraft(snapshot.carbSettings)
+    if (snapshot.carbSettings.preferredNutritionSource !== 'manual') {
+      setLookupSource(snapshot.carbSettings.preferredNutritionSource)
+    }
     setScheduleDraft(snapshot.schedule)
     setLoading(false)
   }, [])
@@ -509,6 +568,7 @@ function App() {
   const routineExercises = data?.routineExercises ?? emptyRoutineExercises
   const logs = data?.workoutLogs ?? emptyLogs
   const entries = data?.exerciseLogEntries ?? emptyEntries
+  const carbEntries = data?.carbEntries ?? emptyCarbEntries
   const scheduledToday = data ? getScheduledRoutineForDate(today, data.schedule, routines) : null
   const nextRecommendation = data ? getNextRecommendedRoutine(today, data.schedule, routines) : null
   const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId) ?? nextRecommendation?.routine ?? enabledRoutines[0]
@@ -800,12 +860,198 @@ function App() {
       )
     : 0
 
-  const handleExportJson = async () => {
-    downloadText(`ramprep-backup-${new Date().toISOString().slice(0, 10)}.json`, await exportAllData(), 'application/json')
+  const handleExportJson = async (includePrivateSettings = false) => {
+    downloadText(
+      `ramprep-backup-${new Date().toISOString().slice(0, 10)}${includePrivateSettings ? '-private' : ''}.json`,
+      await exportAllData({ includePrivateSettings }),
+      'application/json',
+    )
   }
 
   const handleExportCsv = async () => {
     downloadText(`ramprep-workout-logs-${new Date().toISOString().slice(0, 10)}.csv`, await exportWorkoutLogsCsv(), 'text/csv')
+  }
+
+  const handleExportCarbCsv = async () => {
+    downloadText(`ramprep-carb-entries-${new Date().toISOString().slice(0, 10)}.csv`, await exportCarbEntriesCsv(), 'text/csv')
+  }
+
+  const goalForSelectedCarbDate = () =>
+    data && carbSettingsDraft ? goalForDate(carbSelectedDate, data.carbGoalHistory, carbSettingsDraft) : 50
+
+  const addCarbEntry = async ({
+    netCarbs,
+    mealSlot = carbMealSlot,
+    sourceType,
+    sourceLabel,
+    savedFoodName,
+  }: {
+    netCarbs: number
+    mealSlot?: CarbMealSlot
+    sourceType: CarbEntry['sourceType']
+    sourceLabel?: string
+    savedFoodName?: string
+  }) => {
+    if (!data || !carbSettingsDraft) {
+      return
+    }
+
+    await createCarbEntry({
+      dateISO: carbSelectedDate,
+      mealSlot,
+      netCarbs,
+      sourceType,
+      sourceLabel: sourceLabel ?? sourceLabels[sourceType],
+      savedFoodName: carbSettingsDraft.saveFoodNamesInLog ? savedFoodName : undefined,
+      goalGramsAtEntry: goalForSelectedCarbDate(),
+    })
+    await refresh()
+  }
+
+  const handleAddManualCarbs = async () => {
+    await addCarbEntry({ netCarbs: carbAmount, sourceType: 'manual', sourceLabel: 'manual' })
+    if (!addCarbRepeat) {
+      setCarbAmount(0)
+    }
+    showFlash('Net carbs added.')
+  }
+
+  const handleSaveCarbEdit = async () => {
+    if (!carbEditEntry) {
+      return
+    }
+
+    await updateCarbEntry({ ...carbEditEntry, netCarbs: normalizeCarbGrams(carbEditEntry.netCarbs) })
+    setCarbEditEntry(null)
+    await refresh()
+    showFlash('Carb entry updated.')
+  }
+
+  const handleSaveCarbSettings = async () => {
+    if (!carbSettingsDraft) {
+      return
+    }
+
+    await saveCarbSettings(carbSettingsDraft)
+    await refresh()
+    showFlash('Carb settings saved.')
+  }
+
+  const handlePresetSave = async () => {
+    const name = presetDraft.name.trim()
+    if (!name) {
+      showFlash('Name the preset first.')
+      return
+    }
+
+    await saveCarbPreset({
+      id: presetDraft.id || undefined,
+      name,
+      netCarbs: presetDraft.netCarbs,
+      servingDescription: presetDraft.servingDescription.trim() || undefined,
+      sourceType: 'preset',
+    })
+    setPresetDraft({ id: '', name: '', netCarbs: 0, servingDescription: '' })
+    await refresh()
+    showFlash('Carb preset saved.')
+  }
+
+  const handleUsePreset = async (preset: AppData['carbPresets'][number]) => {
+    await addCarbEntry({
+      netCarbs: preset.netCarbs,
+      sourceType: 'preset',
+      sourceLabel: 'preset',
+      savedFoodName: preset.name,
+    })
+    await markCarbPresetUsed(preset)
+    await refresh()
+    showFlash('Preset added. Delete the entry if that was a mis-tap.')
+  }
+
+  const handleLookupSearch = async () => {
+    if (!lookupQuery.trim() || !carbSettingsDraft) {
+      return
+    }
+
+    setLookupLoading(true)
+    setLookupError('')
+    setLookupSelected(null)
+    try {
+      const cached = await getFoodLookupCache(lookupSource, lookupQuery)
+      if (cached) {
+        setLookupResults(JSON.parse(cached.resultJson) as FoodLookupResult[])
+        return
+      }
+
+      const options = {
+        apiKey: carbSettingsDraft.foodDataCentralApiKey,
+        subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
+      }
+      const results =
+        lookupSource === 'usda' ? await searchUsdaFoods(lookupQuery, options) : await searchOpenFoodFacts(lookupQuery, options)
+      setLookupResults(results)
+      await saveFoodLookupCache(lookupSource, lookupQuery, JSON.stringify(results))
+      if (!results.length) {
+        setLookupError('No lookup results found. Manual entry still works.')
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Lookup failed.'
+      setLookupError(message)
+      setLookupResults([])
+    } finally {
+      setLookupLoading(false)
+    }
+  }
+
+  const handleSelectLookupResult = async (result: FoodLookupResult) => {
+    setLookupError('')
+    setLookupLoading(true)
+    try {
+      const detailed =
+        result.source === 'usda' && carbSettingsDraft
+          ? (await getUsdaFoodDetails(result.sourceId, {
+              apiKey: carbSettingsDraft.foodDataCentralApiKey,
+              subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
+            })) ?? result
+          : result
+      setLookupSelected(detailed)
+      setLookupOverride(detailed.netCarbs)
+    } catch {
+      setLookupSelected(result)
+      setLookupOverride(result.netCarbs)
+    } finally {
+      setLookupLoading(false)
+    }
+  }
+
+  const handleAddLookupCarbs = async () => {
+    if (!lookupSelected) {
+      return
+    }
+
+    await addCarbEntry({
+      netCarbs: lookupOverride ?? lookupSelected.netCarbs,
+      sourceType: lookupSelected.sourceType,
+      sourceLabel: lookupSelected.attribution,
+      savedFoodName: lookupSelected.name,
+    })
+    showFlash('Lookup carbs added.')
+  }
+
+  const handleSaveLookupPreset = async () => {
+    if (!lookupSelected) {
+      return
+    }
+
+    await saveCarbPreset({
+      name: lookupSelected.name,
+      netCarbs: lookupOverride ?? lookupSelected.netCarbs,
+      servingDescription: lookupSelected.servingSize,
+      sourceType: lookupSelected.sourceType,
+      sourceId: lookupSelected.sourceId,
+    })
+    await refresh()
+    showFlash('Lookup saved as preset.')
   }
 
   const handleImport = async (file?: File) => {
@@ -818,7 +1064,7 @@ function App() {
     showFlash('Backup imported.')
   }
 
-  if (loading || !data || !settingsDraft || !scheduleDraft) {
+  if (loading || !data || !settingsDraft || !carbSettingsDraft || !scheduleDraft) {
     return (
       <main className="loading-screen">
         <Dumbbell aria-hidden="true" />
@@ -828,6 +1074,17 @@ function App() {
   }
 
   const recentLogs = logs.slice(0, 5)
+  const carbReports = buildCarbReports(carbEntries, data.carbGoalHistory, data.carbSettings, today)
+  const todayCarbStatus = carbStatusText(carbReports.today.total, carbReports.today.goal)
+  const selectedDayEntries = carbEntries
+    .filter((entry) => entry.dateISO === carbSelectedDate)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const selectedDayMealTotals = totalCarbsByMeal(carbEntries, carbSelectedDate)
+  const selectedDayTotal = selectedDayMealTotals.reduce((sum, item) => sum + item.value, 0)
+  const selectedDayGoal = goalForDate(carbSelectedDate, data.carbGoalHistory, data.carbSettings)
+  const selectedDayStatus = carbStatusText(selectedDayTotal, selectedDayGoal)
+  const recentPresets = sortedCarbPresets(data.carbPresets)
+  const lookupSourceLabel = lookupSource === 'usda' ? 'USDA' : 'Open Food Facts'
   const routineById = new Map(routines.map((routine) => [routine.id, routine]))
   const completedLogs = logs.filter((log) => log.status === 'completed')
   const strengthSessions = completedLogs.filter((log) => routineById.get(log.routineId ?? '')?.type === 'strength').length
@@ -893,15 +1150,21 @@ function App() {
               {page === 'dashboard' && 'Today'}
               {page === 'workouts' && 'Workouts'}
               {page === 'log' && 'Workout Log'}
+              {page === 'carbs' && 'Carbs'}
               {page === 'progress' && 'Progress'}
               {page === 'settings' && 'Settings'}
               {page === 'roadmap' && 'Tour Roadmap'}
             </h1>
           </div>
         </div>
-        <div className="status-pill">
-          <Flame aria-hidden="true" size={18} />
-          {streak} day streak
+        <div className="topbar-actions">
+          <div className="status-pill">
+            <Flame aria-hidden="true" size={18} />
+            {streak} day streak
+          </div>
+          <button className="icon-button" type="button" aria-label="Open settings" onClick={() => setPage('settings')}>
+            <Settings aria-hidden="true" size={18} />
+          </button>
         </div>
       </header>
 
@@ -945,6 +1208,32 @@ function App() {
               <p>completed days in a row</p>
             </Card>
           </section>
+
+          <Card className="carb-summary-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Net carbs today</p>
+                <h2>
+                  {carbReports.today.total} / {carbReports.today.goal}g
+                </h2>
+              </div>
+              <span className="tag">{todayCarbStatus}</span>
+            </div>
+            <div className="progress-track">
+              <span style={{ width: `${Math.min(100, (carbReports.today.total / Math.max(1, carbReports.today.goal)) * 100)}%` }} />
+            </div>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => {
+                setCarbSelectedDate(toDateKey(new Date()))
+                setPage('carbs')
+              }}
+            >
+              <Plus aria-hidden="true" size={18} />
+              Add carbs
+            </button>
+          </Card>
 
           <Card>
             <div className="section-title">
@@ -1838,6 +2127,446 @@ function App() {
         </main>
       )}
 
+      {page === 'carbs' && (
+        <main className="page-grid carb-page">
+          <Card className="carb-hero">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Today</p>
+                <h2>
+                  {carbReports.today.total} / {carbReports.today.goal}g
+                </h2>
+              </div>
+              <span className="tag">{todayCarbStatus}</span>
+            </div>
+            <div className="progress-track">
+              <span style={{ width: `${Math.min(100, (carbReports.today.total / Math.max(1, carbReports.today.goal)) * 100)}%` }} />
+            </div>
+            <div className="mini-stepper-grid">
+              <NumberStepper
+                label="Daily goal"
+                value={carbSettingsDraft.dailyNetCarbGoalGrams}
+                min={0}
+                max={400}
+                suffix="g"
+                quickOptions={[20, 30, 50, 75, 100]}
+                quickIncrements={[1, 5, 10]}
+                onChange={(value) =>
+                  setCarbSettingsDraft({ ...carbSettingsDraft, dailyNetCarbGoalGrams: normalizeCarbGrams(value) })
+                }
+              />
+              <button className="ghost-button" type="button" onClick={() => void handleSaveCarbSettings()}>
+                <Save aria-hidden="true" size={18} />
+                Save goal
+              </button>
+            </div>
+          </Card>
+
+          <Card className="quick-carb-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Quick add</p>
+                <h2>{selectedDayStatus}</h2>
+              </div>
+              <label className="date-pill">
+                <span>Date</span>
+                <input type="date" value={carbSelectedDate} onChange={(event) => setCarbSelectedDate(event.target.value)} />
+              </label>
+            </div>
+            <div className="meal-slot-grid" aria-label="Meal slot">
+              {carbMealSlots.map((slot) => (
+                <button
+                  className={carbMealSlot === slot ? 'active' : ''}
+                  key={slot}
+                  type="button"
+                  onClick={() => setCarbMealSlot(slot)}
+                >
+                  {carbMealSlotLabels[slot]}
+                </button>
+              ))}
+            </div>
+            <NumberStepper
+              label="Net carbs"
+              value={carbAmount}
+              min={0}
+              max={300}
+              step={1}
+              suffix="g"
+              quickOptions={carbQuickPicks}
+              quickIncrements={[1, 5, 10]}
+              onChange={(value) => setCarbAmount(normalizeCarbGrams(value))}
+            />
+            <label className="inline-check">
+              <input checked={addCarbRepeat} type="checkbox" onChange={(event) => setAddCarbRepeat(event.target.checked)} />
+              Add and repeat
+            </label>
+            <button className="primary-button" type="button" onClick={() => void handleAddManualCarbs()}>
+              <Plus aria-hidden="true" size={18} />
+              Add {carbAmount}g to {carbMealSlotLabels[carbMealSlot]}
+            </button>
+          </Card>
+
+          <Card className="meal-breakdown-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">{carbSelectedDate}</p>
+                <h2>Meal breakdown</h2>
+              </div>
+              <span className="tag">
+                {selectedDayTotal}/{selectedDayGoal}g
+              </span>
+            </div>
+            <div className="meal-section-list">
+              {selectedDayMealTotals.map((meal) => {
+                const mealEntries = selectedDayEntries.filter((entry) => entry.mealSlot === meal.slot)
+                return (
+                  <details className="meal-section" key={meal.slot} open={mealEntries.length > 0}>
+                    <summary>
+                      <span>{meal.label}</span>
+                      <strong>{meal.value}g</strong>
+                    </summary>
+                    <button
+                      className="text-icon-button"
+                      type="button"
+                      onClick={() => {
+                        setCarbMealSlot(meal.slot)
+                        setCarbAmount(0)
+                      }}
+                    >
+                      <Plus aria-hidden="true" size={16} />
+                      Add here
+                    </button>
+                    {mealEntries.length ? (
+                      <div className="stack">
+                        {mealEntries.map((entry) => (
+                          <div className="carb-entry-row" key={entry.id}>
+                            {carbEditEntry?.id === entry.id ? (
+                              <div className="carb-entry-edit">
+                                <select
+                                  value={carbEditEntry.mealSlot}
+                                  onChange={(event) =>
+                                    setCarbEditEntry({ ...carbEditEntry, mealSlot: event.target.value as CarbMealSlot })
+                                  }
+                                >
+                                  {carbMealSlots.map((slot) => (
+                                    <option key={slot} value={slot}>
+                                      {carbMealSlotLabels[slot]}
+                                    </option>
+                                  ))}
+                                </select>
+                                <NumberStepper
+                                  label="Net carbs"
+                                  value={carbEditEntry.netCarbs}
+                                  min={0}
+                                  max={300}
+                                  suffix="g"
+                                  quickOptions={carbQuickPicks}
+                                  quickIncrements={[1, 5, 10]}
+                                  onChange={(value) =>
+                                    setCarbEditEntry({ ...carbEditEntry, netCarbs: normalizeCarbGrams(value) })
+                                  }
+                                />
+                                <div className="button-grid">
+                                  <button className="ghost-button" type="button" onClick={() => void handleSaveCarbEdit()}>
+                                    <Save aria-hidden="true" size={18} />
+                                    Save
+                                  </button>
+                                  <button className="danger-button" type="button" onClick={() => setCarbEditEntry(null)}>
+                                    <X aria-hidden="true" size={18} />
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div>
+                                  <strong>{entry.netCarbs}g net</strong>
+                                  <p>
+                                    {sourceLabels[entry.sourceType]}
+                                    {entry.savedFoodName ? ` · ${entry.savedFoodName}` : ''}
+                                  </p>
+                                </div>
+                                <div className="toolbar">
+                                  <button className="icon-button" type="button" aria-label="Edit carb entry" onClick={() => setCarbEditEntry(entry)}>
+                                    <Pencil aria-hidden="true" size={18} />
+                                  </button>
+                                  <button
+                                    className="icon-button danger"
+                                    type="button"
+                                    aria-label="Delete carb entry"
+                                    onClick={async () => {
+                                      await deleteCarbEntry(entry.id)
+                                      await refresh()
+                                      showFlash('Carb entry deleted.')
+                                    }}
+                                  >
+                                    <Trash2 aria-hidden="true" size={18} />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <EmptyState title="No entries" body="Tap Add here or use Quick add." />
+                    )}
+                  </details>
+                )
+              })}
+            </div>
+          </Card>
+
+          <Card className="lookup-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Optional lookup</p>
+                <h2>{lookupSourceLabel}</h2>
+              </div>
+              {lookupLoading && <span className="tag">Searching</span>}
+            </div>
+            <div className="form-grid">
+              <label>
+                Search
+                <input
+                  value={lookupQuery}
+                  onChange={(event) => setLookupQuery(event.target.value)}
+                  placeholder="food or packaged item"
+                />
+              </label>
+              <label>
+                Source
+                <select value={lookupSource} onChange={(event) => setLookupSource(event.target.value as FoodLookupSource)}>
+                  <option value="usda">USDA</option>
+                  <option value="openFoodFacts">Open Food Facts</option>
+                </select>
+              </label>
+            </div>
+            {lookupSource === 'openFoodFacts' && <p className="notice">{openFoodFactsWarning}</p>}
+            <button className="ghost-button" type="button" disabled={lookupLoading} onClick={() => void handleLookupSearch()}>
+              <Search aria-hidden="true" size={18} />
+              Search
+            </button>
+            {lookupError && <p className="notice">{lookupError}</p>}
+            {lookupResults.length ? (
+              <div className="lookup-results">
+                {lookupResults.map((result) => (
+                  <button key={result.id} type="button" onClick={() => void handleSelectLookupResult(result)}>
+                    <span>
+                      <strong>{result.name}</strong>
+                      <small>
+                        {result.brand ? `${result.brand} · ` : ''}
+                        {result.servingSize ?? 'serving unclear'}
+                      </small>
+                    </span>
+                    <b>{result.netCarbs}g</b>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {lookupSelected && (
+              <div className="lookup-detail">
+                <div>
+                  <p className="eyebrow">{lookupSelected.attribution}</p>
+                  <h3>{lookupSelected.name}</h3>
+                  <p>{lookupSelected.formula}</p>
+                  <p>
+                    {lookupSelected.servingSize ?? 'Serving unclear'}
+                    {lookupSelected.brand ? ` · ${lookupSelected.brand}` : ''}
+                  </p>
+                  {lookupSelected.servingWarning && <p className="notice">{lookupSelected.servingWarning}</p>}
+                </div>
+                <NumberStepper
+                  label="Manual override"
+                  value={lookupOverride}
+                  min={0}
+                  max={300}
+                  suffix="g"
+                  quickOptions={carbQuickPicks}
+                  quickIncrements={[1, 5, 10]}
+                  onChange={(value) => setLookupOverride(normalizeCarbGrams(value))}
+                />
+                <div className="button-grid">
+                  <button className="ghost-button" type="button" onClick={() => void handleAddLookupCarbs()}>
+                    <Plus aria-hidden="true" size={18} />
+                    Add to meal
+                  </button>
+                  <button className="ghost-button" type="button" onClick={() => void handleSaveLookupPreset()}>
+                    <Save aria-hidden="true" size={18} />
+                    Save preset
+                  </button>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card className="preset-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Shortcuts</p>
+                <h2>Carb presets</h2>
+              </div>
+            </div>
+            <div className="form-grid">
+              <label>
+                Name
+                <input value={presetDraft.name} onChange={(event) => setPresetDraft({ ...presetDraft, name: event.target.value })} />
+              </label>
+              <label>
+                Serving
+                <input
+                  value={presetDraft.servingDescription}
+                  onChange={(event) => setPresetDraft({ ...presetDraft, servingDescription: event.target.value })}
+                  placeholder="optional"
+                />
+              </label>
+            </div>
+            <NumberStepper
+              label="Preset net carbs"
+              value={presetDraft.netCarbs}
+              min={0}
+              max={300}
+              suffix="g"
+              quickOptions={carbQuickPicks}
+              quickIncrements={[1, 5, 10]}
+              onChange={(value) => setPresetDraft({ ...presetDraft, netCarbs: normalizeCarbGrams(value) })}
+            />
+            <button className="ghost-button" type="button" onClick={() => void handlePresetSave()}>
+              <Save aria-hidden="true" size={18} />
+              Save preset
+            </button>
+            {recentPresets.length ? (
+              <div className="preset-list">
+                {recentPresets.map((preset) => (
+                  <div className="preset-row" key={preset.id}>
+                    <div>
+                      <strong>{preset.name}</strong>
+                      <p>
+                        {preset.netCarbs}g
+                        {preset.servingDescription ? ` · ${preset.servingDescription}` : ''} · used {preset.useCount}
+                      </p>
+                    </div>
+                    <div className="toolbar">
+                      <button className="ghost-button" type="button" onClick={() => void handleUsePreset(preset)}>
+                        Use
+                      </button>
+                      <button
+                        className="icon-button"
+                        type="button"
+                        aria-label="Edit preset"
+                        onClick={() =>
+                          setPresetDraft({
+                            id: preset.id,
+                            name: preset.name,
+                            netCarbs: preset.netCarbs,
+                            servingDescription: preset.servingDescription ?? '',
+                          })
+                        }
+                      >
+                        <Pencil aria-hidden="true" size={18} />
+                      </button>
+                      <button
+                        className="icon-button danger"
+                        type="button"
+                        aria-label="Delete preset"
+                        onClick={async () => {
+                          await deleteCarbPreset(preset.id)
+                          await refresh()
+                          showFlash('Preset deleted.')
+                        }}
+                      >
+                        <Trash2 aria-hidden="true" size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="No presets yet" body="Save a frequent entry as a lightweight shortcut." />
+            )}
+          </Card>
+
+          <Card className="carb-reports-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Reports</p>
+                <h2>Net-carb trends</h2>
+              </div>
+            </div>
+            <section className="metric-grid">
+              <div className="report-tile">
+                <p className="eyebrow">Today</p>
+                <strong>{carbReports.today.total}g</strong>
+              </div>
+              <div className="report-tile">
+                <p className="eyebrow">Last 7 days</p>
+                <strong>{carbReports.last7Total}g</strong>
+              </div>
+              <div className="report-tile">
+                <p className="eyebrow">Last 30 days</p>
+                <strong>{carbReports.last30Total}g</strong>
+              </div>
+              <div className="report-tile">
+                <p className="eyebrow">Goal days</p>
+                <strong>{carbReports.compliance.percentageMet}%</strong>
+              </div>
+            </section>
+            <div className="stacked-meal-bar" aria-label="Selected day meal-slot stacked bar">
+              {selectedDayMealTotals.map((meal) => (
+                <span
+                  key={meal.slot}
+                  style={{ width: `${Math.max(3, (meal.value / Math.max(1, selectedDayTotal)) * 100)}%` }}
+                  title={`${meal.label}: ${meal.value}g`}
+                />
+              ))}
+            </div>
+            <BarList data={carbReports.daily.slice(-14).map((item) => ({ label: formatShortDate(item.dateISO), value: item.total }))} unit="g" />
+            <div className="report-list">
+              {carbReports.weekly.slice(-4).map((week) => (
+                <div className="report-row" key={week.key}>
+                  <strong>{formatShortDate(week.key)}</strong>
+                  <p>
+                    {week.total}g total · {week.averagePerDay}g/day · {week.goalDaysMet} met / {week.goalDaysOver} over
+                  </p>
+                </div>
+              ))}
+              {carbReports.monthly.slice(-3).map((month) => (
+                <div className="report-row" key={month.key}>
+                  <strong>{month.key}</strong>
+                  <p>
+                    {month.total}g total · {month.averagePerDay}g/day · {month.goalDaysMet} days met
+                  </p>
+                </div>
+              ))}
+              <div className="report-row">
+                <strong>Streaks</strong>
+                <p>
+                  Current {carbReports.compliance.currentStreak} days · best {carbReports.compliance.longestStreak} days
+                </p>
+              </div>
+            </div>
+            <div className="mini-report-grid">
+              {carbReports.dayOfWeek.map((item) => (
+                <div className="report-tile" key={item.label}>
+                  <p className="eyebrow">{item.label.slice(0, 3)}</p>
+                  <strong>{item.average}g</strong>
+                  <small>{item.total}g total</small>
+                </div>
+              ))}
+            </div>
+            <div className="mini-report-grid">
+              {carbReports.mealSlot.map((item) => (
+                <div className="report-tile" key={item.label}>
+                  <p className="eyebrow">{item.label}</p>
+                  <strong>{item.average}g</strong>
+                  <small>{item.total}g total</small>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </main>
+      )}
+
       {page === 'progress' && (
         <main className="page-grid">
           <section className="metric-grid">
@@ -2141,6 +2870,119 @@ function App() {
           </Card>
 
           <Card>
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Private local settings</p>
+                <h2>Carb Settings</h2>
+              </div>
+              <button className="icon-button" type="button" aria-label="Save carb settings" onClick={() => void handleSaveCarbSettings()}>
+                <Save aria-hidden="true" size={18} />
+              </button>
+            </div>
+            <NumberStepper
+              label="Daily net-carb goal"
+              value={carbSettingsDraft.dailyNetCarbGoalGrams}
+              min={0}
+              max={400}
+              suffix="g"
+              quickOptions={[20, 30, 50, 75, 100]}
+              quickIncrements={[1, 5, 10]}
+              onChange={(value) => setCarbSettingsDraft({ ...carbSettingsDraft, dailyNetCarbGoalGrams: normalizeCarbGrams(value) })}
+            />
+            <div className="form-grid">
+              <label>
+                Save food names in carb log
+                <span className="inline-check">
+                  <input
+                    checked={carbSettingsDraft.saveFoodNamesInLog}
+                    type="checkbox"
+                    onChange={(event) => setCarbSettingsDraft({ ...carbSettingsDraft, saveFoodNamesInLog: event.target.checked })}
+                  />
+                  off by default
+                </span>
+              </label>
+              <label>
+                Subtract sugar alcohols
+                <span className="inline-check">
+                  <input
+                    checked={carbSettingsDraft.subtractSugarAlcoholsWhenAvailable}
+                    type="checkbox"
+                    onChange={(event) =>
+                      setCarbSettingsDraft({
+                        ...carbSettingsDraft,
+                        subtractSugarAlcoholsWhenAvailable: event.target.checked,
+                      })
+                    }
+                  />
+                  only when explicit
+                </span>
+              </label>
+              <label>
+                FoodData Central API key
+                <input
+                  type="password"
+                  value={carbSettingsDraft.foodDataCentralApiKey ?? ''}
+                  onChange={(event) => setCarbSettingsDraft({ ...carbSettingsDraft, foodDataCentralApiKey: event.target.value })}
+                  placeholder="stored locally"
+                />
+              </label>
+              <label>
+                Preferred lookup source
+                <select
+                  value={carbSettingsDraft.preferredNutritionSource}
+                  onChange={(event) =>
+                    setCarbSettingsDraft({
+                      ...carbSettingsDraft,
+                      preferredNutritionSource: event.target.value as CarbSettings['preferredNutritionSource'],
+                    })
+                  }
+                >
+                  <option value="manual">manual</option>
+                  <option value="usda">USDA</option>
+                  <option value="openFoodFacts">Open Food Facts</option>
+                </select>
+              </label>
+            </div>
+            <p className="notice">Manual entry works offline. The USDA key is stored locally and excluded from normal JSON export.</p>
+            <div className="button-grid">
+              <button className="ghost-button" type="button" onClick={() => void handleSaveCarbSettings()}>
+                <Save aria-hidden="true" size={18} />
+                Save
+              </button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={async () => {
+                  await clearFoodLookupCache()
+                  await refresh()
+                  showFlash('Lookup cache cleared.')
+                }}
+              >
+                <RefreshCcw aria-hidden="true" size={18} />
+                Clear cache
+              </button>
+              <button className="ghost-button" type="button" onClick={() => void handleExportCarbCsv()}>
+                <Download aria-hidden="true" size={18} />
+                Carb CSV
+              </button>
+              <button
+                className="danger-button"
+                type="button"
+                onClick={async () => {
+                  if (window.confirm('Delete all carb entries? Presets and workout data stay intact.')) {
+                    await deleteAllCarbEntries()
+                    await refresh()
+                    showFlash('Carb entries deleted.')
+                  }
+                }}
+              >
+                <Trash2 aria-hidden="true" size={18} />
+                Delete carbs
+              </button>
+            </div>
+          </Card>
+
+          <Card>
             <h2>Plan Editor</h2>
             <div className="form-grid">
               <label>
@@ -2328,9 +3170,25 @@ function App() {
                 <Download aria-hidden="true" size={18} />
                 JSON
               </button>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => {
+                  if (window.confirm('Include private local API settings in this JSON export?')) {
+                    void handleExportJson(true)
+                  }
+                }}
+              >
+                <Download aria-hidden="true" size={18} />
+                Private JSON
+              </button>
               <button className="ghost-button" type="button" onClick={() => void handleExportCsv()}>
                 <Download aria-hidden="true" size={18} />
-                CSV
+                Workout CSV
+              </button>
+              <button className="ghost-button" type="button" onClick={() => void handleExportCarbCsv()}>
+                <Download aria-hidden="true" size={18} />
+                Carb CSV
               </button>
               <label className="file-button">
                 <Upload aria-hidden="true" size={18} />
