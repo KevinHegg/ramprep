@@ -157,9 +157,15 @@ export const ensureV11Seeds = async () => {
           !exercise.regressions?.length ||
           !exercise.progressions?.length ||
           !exercise.dose ||
-          !exercise.safety?.length
+          !exercise.safety?.length ||
+          !exercise.sourceReferences?.length
+        const hasOutdatedReviewedGuidance =
+          JSON.stringify(exercise.instructions) !== JSON.stringify(seededExercise.instructions) ||
+          JSON.stringify(exercise.formCues) !== JSON.stringify(seededExercise.formCues) ||
+          JSON.stringify(exercise.commonMistakes) !== JSON.stringify(seededExercise.commonMistakes) ||
+          JSON.stringify(exercise.sourceReferences ?? []) !== JSON.stringify(seededExercise.sourceReferences ?? [])
 
-        if (hasOldGenericInstruction || hasOldTaxonomyOrGuidance) {
+        if (hasOldGenericInstruction || hasOldTaxonomyOrGuidance || hasOutdatedReviewedGuidance) {
           instructionUpdates.push({
             ...exercise,
             group: seededExercise.group,
@@ -173,6 +179,7 @@ export const ensureV11Seeds = async () => {
             progressions: seededExercise.progressions,
             dose: seededExercise.dose,
             safety: seededExercise.safety,
+            sourceReferences: seededExercise.sourceReferences,
             updatedAt: nowIso(),
           })
         }

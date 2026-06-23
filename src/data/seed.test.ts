@@ -16,7 +16,8 @@ describe('seed exercise guidance', () => {
 
   it('does not generate name-repeating quick exercise instructions', () => {
     const downwardDog = seedExercises.find((exercise) => exercise.id === 'downward-dog')
-    expect(downwardDog?.instructions[0]).toBe('Start on hands and knees with hands slightly forward of shoulders.')
+    expect(downwardDog?.setup).toContain('Hands slightly forward of shoulders')
+    expect(downwardDog?.instructions[0]).toBe('Exhale and lift knees from the floor.')
     expect(downwardDog?.instructions.join(' ').toLowerCase()).not.toContain('set up for downward dog')
   })
 

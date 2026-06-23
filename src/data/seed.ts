@@ -12,29 +12,10 @@ import type {
   TourRoadmap,
   UserSettings,
 } from '../types'
+import { instructionReviewForExercise } from './exerciseInstructionCatalog'
 
 const seedTimestamp = '2026-01-01T12:00:00.000Z'
 const localAttribution = 'Original local seed data created for RampRep.'
-
-const exerciseArt = (label: string, color: string, accent: string) => {
-  const short = label
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0]?.toUpperCase())
-    .join('')
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 220" role="img" aria-label="${label}">
-    <rect width="320" height="220" rx="18" fill="${color}"/>
-    <circle cx="250" cy="54" r="36" fill="${accent}" opacity="0.22"/>
-    <path d="M42 158c34-54 70-82 108-82 42 0 72 34 128 88" fill="none" stroke="${accent}" stroke-width="18" stroke-linecap="round"/>
-    <path d="M76 150h168" stroke="rgba(255,255,255,0.62)" stroke-width="12" stroke-linecap="round"/>
-    <circle cx="128" cy="80" r="24" fill="rgba(255,255,255,0.72)"/>
-    <text x="160" y="188" text-anchor="middle" font-family="Inter, system-ui, sans-serif" font-size="44" font-weight="800" fill="rgba(255,255,255,0.86)">${short}</text>
-  </svg>`
-
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
-}
 
 interface ExerciseSeed {
   id: string
@@ -49,6 +30,7 @@ interface ExerciseSeed {
   progressions?: string[]
   dose?: string
   safety?: string[]
+  sourceReferences?: Exercise['sourceReferences']
   targetAreas: string[]
   equipment: EquipmentKind[]
   difficulty: Exercise['difficulty']
@@ -268,23 +250,17 @@ const structuredGuidance = (seed: ExerciseSeed, group: ExerciseGroup) => ({
 })
 
 const makeExercise = (seed: ExerciseSeed, index: number): Exercise => {
-  const colors = [
-    ['#214e5f', '#8bd3c7'],
-    ['#7c3f2f', '#ffb36b'],
-    ['#2f5f3f', '#b9e769'],
-    ['#39406f', '#9db7ff'],
-    ['#5c335f', '#f4a7c8'],
-    ['#62572b', '#f0d56f'],
-  ]
-  const [color, accent] = colors[index % colors.length]
+  void index
   const group = seed.group ?? inferExerciseGroup(seed)
   const guidance = structuredGuidance(seed, group)
+  const reviewed = instructionReviewForExercise(seed.id)
 
   return {
     ...seed,
     group,
     ...guidance,
-    imageUrl: seed.imageUrl ?? exerciseArt(seed.name, color, accent),
+    ...reviewed,
+    imageUrl: seed.imageUrl,
     attribution: seed.attribution ?? localAttribution,
     createdAt: seedTimestamp,
     updatedAt: seedTimestamp,
@@ -824,17 +800,7 @@ const extraExerciseSeeds: ExerciseSeed[] = [
 
 export const seedExercises = [...exerciseSeeds, ...extraExerciseSeeds].map(makeExercise)
 
-export const seedExerciseMedia: ExerciseMedia[] = seedExercises.map((exercise) => ({
-  id: `media-${exercise.id}-offline-motion`,
-  exerciseId: exercise.id,
-  type: 'svg-animation',
-  localSvgKey: exercise.id,
-  sourceName: 'RampRep',
-  attributionText: 'Original RampRep SVG/CSS animation, offline capable.',
-  importedAt: seedTimestamp,
-  isOfflineCapable: true,
-  isTrusted: true,
-}))
+export const seedExerciseMedia: ExerciseMedia[] = []
 
 const routineBase = (id: string, name: string, type: Routine['type'], order: number, estimatedMinutes: number, notes?: string): Routine => ({
   id,

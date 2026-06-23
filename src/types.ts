@@ -70,6 +70,13 @@ export type BikeTourPurpose =
   | 'ride conditioning'
   | 'trailer handling'
 
+export interface ExerciseSourceReference {
+  title: string
+  provider: string
+  url: string
+  reviewedAtISO: string
+}
+
 export interface Exercise {
   id: ID
   name: string
@@ -83,6 +90,7 @@ export interface Exercise {
   progressions?: string[]
   dose?: string
   safety?: string[]
+  sourceReferences?: ExerciseSourceReference[]
   targetAreas: string[]
   equipment: EquipmentKind[]
   difficulty: Difficulty
@@ -278,6 +286,31 @@ export interface ExerciseMedia {
   importedAt: string
   isOfflineCapable: boolean
   isTrusted: boolean
+}
+
+export type ExerciseDemoMediaKind = 'youtubeEmbed' | 'externalVideo' | 'externalHowTo' | 'wgerMedia' | 'freeExerciseDbImage' | 'none'
+export type ExerciseDemoMediaQualityStatus = 'verified' | 'needsReview' | 'rejected'
+
+export interface ExerciseDemoMedia {
+  id: ID
+  exerciseId: ID
+  kind: ExerciseDemoMediaKind
+  title: string
+  provider: string
+  url: string
+  embedUrl?: string
+  youtubeVideoId?: string
+  startSeconds?: number
+  thumbnailUrl?: string
+  sourcePageUrl?: string
+  licenseName?: string
+  licenseUrl?: string
+  attributionText: string
+  reviewedBy: string
+  reviewedAtISO: string
+  qualityStatus: ExerciseDemoMediaQualityStatus
+  rejectionReason?: string
+  offlineAvailable: boolean
 }
 
 export interface RoadmapMilestone {

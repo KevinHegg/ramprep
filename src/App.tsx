@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Activity,
+  ArrowLeft,
   BarChart3,
   CalendarDays,
   CheckCircle2,
@@ -12,8 +13,12 @@ import {
   Copy,
   Download,
   Dumbbell,
+  ExternalLink,
+  Filter,
   Flame,
+  Home,
   Map as MapIcon,
+  Menu,
   MoreVertical,
   Pencil,
   Plus,
@@ -63,6 +68,8 @@ import {
   updateCarbEntry,
   updateWorkoutLog,
 } from './data/repository'
+import { getExerciseDemoMedia, isVerifiedDemoMedia } from './data/exerciseDemoCatalog'
+import { primaryNavItems } from './data/navigation'
 import {
   consistencyByDate,
   exerciseHistory,
@@ -75,7 +82,6 @@ import {
 } from './utils/metrics'
 import {
   calculateConsistencyStreak,
-  calculateWeeklyCompletions,
   dayName,
   getNextRecommendedRoutine,
   getScheduledRoutineForDate,
@@ -113,6 +119,7 @@ import type {
   CarbSettings,
   EquipmentKind,
   Exercise,
+  ExerciseDemoMedia,
   ExerciseGroup,
   ExerciseLogEntry,
   Routine,
@@ -124,17 +131,17 @@ import type {
   WorkoutLog,
 } from './types'
 
-type Page = 'dashboard' | 'workouts' | 'log' | 'carbs' | 'progress' | 'settings' | 'roadmap'
+type Page = 'dashboard' | 'workouts' | 'log' | 'carbs' | 'progress' | 'settings' | 'roadmap' | 'more'
 type WorkoutsTab = 'routines' | 'library'
 type LogMode = 'recommended' | 'routine' | 'free'
 
-const navItems: Array<{ page: Page; label: string; icon: typeof Activity }> = [
-  { page: 'dashboard', label: 'Dashboard', icon: Activity },
-  { page: 'workouts', label: 'Workouts', icon: Dumbbell },
-  { page: 'log', label: 'Log', icon: ClipboardList },
-  { page: 'carbs', label: 'Net Carbs', icon: Flame },
-  { page: 'progress', label: 'Progress', icon: BarChart3 },
-]
+const navIconByPage: Record<(typeof primaryNavItems)[number]['page'], typeof Activity> = {
+  dashboard: Home,
+  log: ClipboardList,
+  carbs: Flame,
+  progress: BarChart3,
+  more: Menu,
+}
 
 const skipReasons: SkipReason[] = ['work', 'travel', 'fatigue', 'soreness', 'illness', 'no time', 'other']
 const equipmentKinds: EquipmentKind[] = ['bodyweight', 'dumbbell', 'kettlebell', 'band', 'yoga mat', 'carry', 'bike', 'trailer', 'chair', 'foam roller', 'suspension trainer', 'pull-up bar']
@@ -519,134 +526,6 @@ const EffortPicker = ({ value, onChange }: { value?: number; onChange: (value: n
   />
 )
 
-type ExerciseMotionKind = 'mobility' | 'core' | 'hinge' | 'single-leg' | 'pull' | 'carry' | 'bike'
-
-const getExerciseMotionKind = (exercise: Exercise): ExerciseMotionKind => {
-  const category = getExerciseCategory(exercise)
-  const text = `${exercise.id} ${exercise.name} ${category}`.toLowerCase()
-
-  if (/bike|ride|spin|trailer|burley|tour|tow/.test(text)) {
-    return 'bike'
-  }
-  if (/carry|walk|hike|conditioning/.test(text)) {
-    return 'carry'
-  }
-  if (/row|pull|face pull|external rotation|upper-back|posture/.test(text)) {
-    return 'pull'
-  }
-  if (/step|split|lunge|calf|wall sit|single-leg/.test(text)) {
-    return 'single-leg'
-  }
-  if (/hinge|deadlift|swing|bridge|glute|hamstring|posterior/.test(text)) {
-    return 'hinge'
-  }
-  if (/dead bug|bird dog|plank|pallof|hollow|curl-up|bear crawl|anti-rotation|anti-extension|core/.test(text)) {
-    return 'core'
-  }
-
-  return 'mobility'
-}
-
-const MotionGuide = ({ kind }: { kind: ExerciseMotionKind }) => {
-  if (kind === 'bike') {
-    return (
-      <g className="motion-bike">
-        <circle className="motion-wheel" cx="46" cy="78" r="18" />
-        <circle className="motion-wheel two" cx="116" cy="78" r="18" />
-        <path className="motion-frame" d="M46 78 L72 50 L92 78 L116 78 L88 50 L72 50" />
-        <circle className="motion-head" cx="88" cy="31" r="8" />
-        <path className="motion-person" d="M86 40 L76 55 L92 58 L112 66" />
-        <path className="motion-person two" d="M77 55 L60 72 M92 58 L82 78" />
-        <path className="motion-load" d="M132 80 h24 v-18 h-24 z M116 78 L132 72" />
-      </g>
-    )
-  }
-
-  if (kind === 'carry') {
-    return (
-      <g className="motion-carry">
-        <circle className="motion-head" cx="82" cy="28" r="9" />
-        <path className="motion-person" d="M82 39 L82 66 M82 49 L61 56 M83 50 L105 56" />
-        <path className="motion-person two" d="M82 66 L68 91 M84 66 L101 91" />
-        <path className="motion-load" d="M47 61 h18 v22 h-18 z M103 61 h18 v22 h-18 z" />
-        <path className="motion-ground" d="M38 95 H140" />
-      </g>
-    )
-  }
-
-  if (kind === 'pull') {
-    return (
-      <g className="motion-pull">
-        <path className="motion-band" d="M30 48 C72 35 96 35 142 48" />
-        <circle className="motion-head" cx="86" cy="27" r="9" />
-        <path className="motion-person" d="M86 38 L86 66 M85 48 L60 50 M87 48 L113 50" />
-        <path className="motion-person two" d="M86 66 L73 91 M88 66 L101 91" />
-        <path className="motion-ground" d="M50 95 H124" />
-      </g>
-    )
-  }
-
-  if (kind === 'single-leg') {
-    return (
-      <g className="motion-step">
-        <path className="motion-box" d="M92 80 h42 v18 H92 z" />
-        <circle className="motion-head" cx="79" cy="27" r="9" />
-        <path className="motion-person" d="M80 38 L82 63 M81 49 L62 60 M82 49 L101 60" />
-        <path className="motion-person two" d="M82 63 L65 91 M83 63 L108 82" />
-        <path className="motion-ground" d="M39 98 H146" />
-      </g>
-    )
-  }
-
-  if (kind === 'hinge') {
-    return (
-      <g className="motion-hinge">
-        <circle className="motion-head" cx="74" cy="30" r="9" />
-        <path className="motion-person" d="M75 42 C88 48 98 56 111 71" />
-        <path className="motion-person two" d="M86 51 L55 72 M108 70 L132 91 M104 70 L79 91" />
-        <path className="motion-load" d="M48 72 h18 v18 h-18 z" />
-        <path className="motion-ground" d="M37 94 H145" />
-      </g>
-    )
-  }
-
-  if (kind === 'core') {
-    return (
-      <g className="motion-core">
-        <path className="motion-mat" d="M34 86 H146" />
-        <circle className="motion-head" cx="72" cy="49" r="9" />
-        <path className="motion-person" d="M83 56 L111 66 M85 58 L58 73" />
-        <path className="motion-person two" d="M90 61 L126 38 M72 61 L48 38" />
-        <path className="motion-ground" d="M42 92 H138" />
-      </g>
-    )
-  }
-
-  return (
-    <g className="motion-mobility">
-      <path className="motion-mat" d="M34 91 H146" />
-      <circle className="motion-head" cx="72" cy="68" r="8" />
-      <path className="motion-person" d="M43 86 L74 58 L118 86" />
-      <path className="motion-person two" d="M74 58 L87 86 M58 73 L43 86 M102 74 L118 86" />
-      <path className="motion-breath" d="M126 35 C139 31 147 38 150 49" />
-    </g>
-  )
-}
-
-const ExerciseMotion = ({ exercise }: { exercise: Exercise }) => {
-  const kind = getExerciseMotionKind(exercise)
-
-  return (
-    <div className={`motion-card motion-${kind}`} aria-hidden="true">
-      <svg viewBox="0 0 180 110">
-        <title>{exercise.name} animated how-to guide</title>
-        <rect width="180" height="110" rx="12" />
-        <MotionGuide kind={kind} />
-      </svg>
-    </div>
-  )
-}
-
 const LogoMark = () => (
   <span className="brand-mark" aria-hidden="true">
     <svg viewBox="0 0 64 64">
@@ -658,134 +537,188 @@ const LogoMark = () => (
   </span>
 )
 
-const ExerciseDemoButton = ({ exercise, onOpen, compact = false }: { exercise: Exercise; onOpen: (id: string) => void; compact?: boolean }) => (
-  <button className={compact ? 'demo-button compact' : 'demo-button'} type="button" onClick={() => onOpen(exercise.id)}>
+const ExerciseDemoButton = ({
+  exercise,
+  onOpen,
+  compact = false,
+}: {
+  exercise: Exercise
+  onOpen: (id: string, launcher?: HTMLElement) => void
+  compact?: boolean
+}) => (
+  <button className={compact ? 'demo-button compact' : 'demo-button'} type="button" onClick={(event) => onOpen(exercise.id, event.currentTarget)}>
     <CircleHelp aria-hidden="true" size={compact ? 16 : 18} />
     <span>How to</span>
   </button>
 )
 
-const CategoryChips = ({
-  value,
-  onChange,
-}: {
-  value: FunctionalCategory | ''
-  onChange: (value: FunctionalCategory | '') => void
-}) => (
-  <div className="category-chip-row" aria-label="Training category filters">
-    <button className={!value ? 'active' : ''} type="button" onClick={() => onChange('')}>
-      All
-    </button>
-    {functionalCategories.map((category) => (
-      <button className={value === category ? 'active' : ''} key={category} type="button" onClick={() => onChange(category)}>
-        {category}
-      </button>
-    ))}
-  </div>
-)
-
-const ExerciseDemoSheet = ({
+const ExerciseDemoView = ({
   exercise,
   media,
   onClose,
+  onLog,
 }: {
   exercise: Exercise
-  media?: AppData['exerciseMedia'][number]
+  media?: ExerciseDemoMedia
   onClose: () => void
-}) => (
-  <div className="sheet-backdrop" role="presentation" onClick={onClose}>
-    <section className="demo-sheet" role="dialog" aria-modal="true" aria-labelledby="demo-title" onClick={(event) => event.stopPropagation()}>
-      <div className="section-title">
+  onLog: () => void
+}) => {
+  const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
+  const sourceHref = media?.sourcePageUrl ?? media?.url ?? exercise.sourceReferences?.[0]?.url
+
+  return (
+    <section className="exercise-demo-view" role="dialog" aria-modal="true" aria-labelledby="demo-title">
+      <header className="demo-view-header">
+        <button className="demo-back-button" type="button" onClick={onClose} autoFocus>
+          <ArrowLeft aria-hidden="true" size={19} />
+          Back
+        </button>
         <div>
           <p className="eyebrow">Exercise demo</p>
           <h2 id="demo-title">{exercise.name}</h2>
         </div>
-        <button className="icon-button" type="button" aria-label="Close demo" onClick={onClose}>
-          <X aria-hidden="true" size={18} />
-        </button>
-      </div>
-      <ExerciseMotion exercise={exercise} />
-      <div className="demo-meta">
+      </header>
+
+      <main className="demo-view-body">
+        <div className="demo-media-panel">
+          {verifiedMedia?.kind === 'youtubeEmbed' && verifiedMedia.embedUrl ? (
+            <iframe
+              title={verifiedMedia.title}
+              src={verifiedMedia.embedUrl}
+              allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          ) : verifiedMedia?.kind === 'externalHowTo' ? (
+            <div className="verified-link-panel">
+              <p className="eyebrow">Verified external how-to</p>
+              <h3>{verifiedMedia.title}</h3>
+              <p>{verifiedMedia.attributionText}</p>
+              <a className="primary-button" href={verifiedMedia.url} target="_blank" rel="noreferrer">
+                <ExternalLink aria-hidden="true" size={18} />
+                Open source
+              </a>
+            </div>
+          ) : (
+            <div className="no-demo-panel">
+              <p className="eyebrow">Media status</p>
+              <h3>No verified demo yet</h3>
+              <p>This exercise needs a reviewed source before RampRep embeds or imports motion media. Written instructions remain available offline.</p>
+              {sourceHref && (
+                <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" size={18} />
+                  Review source
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="demo-meta">
         <span className="tag">{getExerciseCategory(exercise)}</span>
         <span className="tag">{exercise.difficulty}</span>
       </div>
-      <div className="demo-section">
-        <h3>Purpose</h3>
-        <p>{exercise.purpose ?? exercise.description}</p>
-      </div>
-      <div className="demo-section">
-        <h3>Setup</h3>
-        <p>{exercise.setup ?? exercise.instructions[0]}</p>
-      </div>
-      <div className="demo-section">
-        <h3>Steps</h3>
-        <ol>
-          {exercise.instructions.map((step, stepIndex) => (
-            <li key={`${exercise.id}-step-${stepIndex}`}>{step}</li>
-          ))}
-        </ol>
-      </div>
-      <div className="demo-section">
-        <h3>Primary muscles / category</h3>
-        <p>{exercise.targetAreas.join(', ') || getExerciseCategory(exercise)}</p>
-      </div>
-      <div className="demo-section">
-        <h3>Equipment</h3>
-        <p>{exercise.equipment.join(', ') || 'none'}</p>
-      </div>
-      <div className="demo-section">
-        <h3>Coaching cues</h3>
-        <ul>
-          {exercise.formCues.map((cue, cueIndex) => (
-            <li key={`${exercise.id}-cue-${cueIndex}`}>{cue}</li>
-          ))}
-        </ul>
-      </div>
-      <div className="demo-section">
-        <h3>Common mistakes</h3>
-        <ul>
-          {exercise.commonMistakes.map((mistake, mistakeIndex) => (
-            <li key={`${exercise.id}-mistake-${mistakeIndex}`}>{mistake}</li>
-          ))}
-        </ul>
-      </div>
-      <div className="demo-section two-column-section">
-        <div>
-          <h3>Regressions</h3>
+
+        <div className="demo-section">
+          <h3>Purpose</h3>
+          <p>{exercise.purpose ?? exercise.description}</p>
+        </div>
+        <div className="demo-section">
+          <h3>Setup</h3>
+          <p>{exercise.setup ?? exercise.instructions[0]}</p>
+        </div>
+        <div className="demo-section">
+          <h3>Steps</h3>
+          <ol>
+            {exercise.instructions.map((step, stepIndex) => (
+              <li key={`${exercise.id}-step-${stepIndex}`}>{step}</li>
+            ))}
+          </ol>
+        </div>
+        <div className="demo-section">
+          <h3>Form checkpoints</h3>
           <ul>
-            {(exercise.regressions ?? ['Reduce range, load, or time until each rep is clean.']).map((regression, regressionIndex) => (
-              <li key={`${exercise.id}-regression-${regressionIndex}`}>{regression}</li>
+            {exercise.formCues.map((cue, cueIndex) => (
+              <li key={`${exercise.id}-cue-${cueIndex}`}>{cue}</li>
             ))}
           </ul>
         </div>
-        <div>
-          <h3>Progressions</h3>
+        <div className="demo-section">
+          <h3>Common mistakes</h3>
           <ul>
-            {(exercise.progressions ?? ['Add load, time, or range only after form is repeatable.']).map((progression, progressionIndex) => (
-              <li key={`${exercise.id}-progression-${progressionIndex}`}>{progression}</li>
+            {exercise.commonMistakes.map((mistake, mistakeIndex) => (
+              <li key={`${exercise.id}-mistake-${mistakeIndex}`}>{mistake}</li>
             ))}
           </ul>
         </div>
-      </div>
-      <div className="demo-section">
-        <h3>Dose</h3>
-        <p>{exercise.dose ?? prescription({ id: 'demo', routineId: 'demo', exerciseId: exercise.id, section: 'main', order: 1 }, exercise)}</p>
-      </div>
-      <div className="demo-section">
-        <h3>Safety</h3>
-        <ul>
-          {(exercise.safety ?? ['Stop if pain, numbness, dizziness, or sharp joint discomfort appears.']).map((item, itemIndex) => (
-            <li key={`${exercise.id}-safety-${itemIndex}`}>{item}</li>
-          ))}
-        </ul>
-      </div>
-      <p className="demo-attribution">
-        Media: self-authored RampRep SVG/CSS demo first. {media?.attributionText ?? exercise.attribution ?? 'Original RampRep written instructions.'}
-        {media?.licenseName ? ` License: ${media.licenseName}.` : ''}
-      </p>
+        <div className="demo-section two-column-section">
+          <div>
+            <h3>Make it easier</h3>
+            <ul>
+              {(exercise.regressions ?? ['Reduce range, load, or time until each rep is clean.']).map((regression, regressionIndex) => (
+                <li key={`${exercise.id}-regression-${regressionIndex}`}>{regression}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3>Make it harder</h3>
+            <ul>
+              {(exercise.progressions ?? ['Add a small amount of load, time, or range after form is repeatable.']).map((progression, progressionIndex) => (
+                <li key={`${exercise.id}-progression-${progressionIndex}`}>{progression}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="demo-section">
+          <h3>Dose</h3>
+          <p>{exercise.dose ?? prescription({ id: 'demo', routineId: 'demo', exerciseId: exercise.id, section: 'main', order: 1 }, exercise)}</p>
+        </div>
+        <div className="demo-section">
+          <h3>Safety notes</h3>
+          <ul>
+            {(exercise.safety ?? ['Stop if pain, numbness, dizziness, or sharp joint discomfort appears.']).map((item, itemIndex) => (
+              <li key={`${exercise.id}-safety-${itemIndex}`}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="demo-section">
+          <h3>Equipment and target areas</h3>
+          <p>{exercise.equipment.join(', ') || 'none'} · {exercise.targetAreas.join(', ') || getExerciseCategory(exercise)}</p>
+        </div>
+        <div className="demo-section">
+          <h3>Sources</h3>
+          <ul>
+            {(exercise.sourceReferences ?? []).map((source) => (
+              <li key={`${exercise.id}-${source.url}`}>
+                <a href={source.url} target="_blank" rel="noreferrer">{source.provider}: {source.title}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="demo-attribution">
+          {media?.attributionText ?? 'No verified motion media is attached yet.'}
+          {media?.licenseName ? ` License: ${media.licenseName}.` : ''}
+        </p>
+      </main>
+
+      <footer className="demo-view-footer">
+        <button className="primary-button" type="button" onClick={onLog}>
+          <Plus aria-hidden="true" size={18} />
+          Log this
+        </button>
+        <button className="ghost-button" type="button" onClick={onClose}>
+          <ArrowLeft aria-hidden="true" size={18} />
+          Back
+        </button>
+        {sourceHref && (
+          <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
+            <ExternalLink aria-hidden="true" size={18} />
+            Open source
+          </a>
+        )}
+      </footer>
     </section>
-  </div>
-)
+  )
+}
 
 function App() {
   const [page, setPage] = useState<Page>('dashboard')
@@ -799,9 +732,13 @@ function App() {
   const [groupFilter, setGroupFilter] = useState('')
   const [equipmentFilter, setEquipmentFilter] = useState('')
   const [purposeFilter, setPurposeFilter] = useState('')
+  const [difficultyFilter, setDifficultyFilter] = useState('')
+  const [libraryFiltersOpen, setLibraryFiltersOpen] = useState(false)
   const [routineDraft, setRoutineDraft] = useState<Routine | null>(null)
   const [exerciseDraft, setExerciseDraft] = useState<Exercise | null>(null)
   const [demoExerciseId, setDemoExerciseId] = useState('')
+  const demoLauncherRef = useRef<HTMLElement | null>(null)
+  const [editMode, setEditMode] = useState(false)
   const [draftEntries, setDraftEntries] = useState<WorkoutDraftEntry[]>([])
   const [logMode, setLogMode] = useState<LogMode>('recommended')
   const [durationMinutes, setDurationMinutes] = useState(30)
@@ -825,6 +762,7 @@ function App() {
   const [lookupOverride, setLookupOverride] = useState<number | undefined>()
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState('')
+  const [carbPanel, setCarbPanel] = useState<'none' | 'lookup' | 'reports' | 'presets'>('none')
   const [temporaryChangeDraft, setTemporaryChangeDraft] = useState({
     startsOn: '',
     endsOn: '',
@@ -888,9 +826,7 @@ function App() {
   }, [data?.settings])
 
   const deloadApplied = data ? isDeloadWeek(today, data.schedule.deloadEveryFourthWeek) : false
-  const weeklyCompletions = data ? calculateWeeklyCompletions(logs, today) : 0
   const streak = data ? calculateConsistencyStreak(logs, today) : 0
-  const weeklyTarget = data?.schedule.weeklyFrequency ?? 3
   const selectedRoutineExercises = selectedRoutine
     ? routineExercises.filter((entry) => entry.routineId === selectedRoutine.id).sort((a, b) => a.order - b.order)
     : []
@@ -933,6 +869,39 @@ function App() {
     setLogNotes('')
     setPage('log')
   }
+
+  const openExerciseDemo = (exerciseId: string, launcher?: HTMLElement) => {
+    demoLauncherRef.current = launcher ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+    setDemoExerciseId(exerciseId)
+  }
+
+  const closeExerciseDemo = useCallback(() => {
+    setDemoExerciseId('')
+    window.requestAnimationFrame(() => {
+      demoLauncherRef.current?.focus()
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!demoExerciseId) {
+      return undefined
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeExerciseDemo()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [closeExerciseDemo, demoExerciseId])
 
   const handleSaveRoutine = async (routineToSave?: Routine) => {
     if (!routineToSave) {
@@ -1424,12 +1393,13 @@ function App() {
       (!categoryFilter || getExerciseCategory(exercise) === categoryFilter) &&
       (!groupFilter || exercise.group === groupFilter) &&
       (!equipmentFilter || exercise.equipment.includes(equipmentFilter as EquipmentKind)) &&
-      (!purposeFilter || exercise.bikeTourPurpose?.includes(purposeFilter as BikeTourPurpose))
+      (!purposeFilter || exercise.bikeTourPurpose?.includes(purposeFilter as BikeTourPurpose)) &&
+      (!difficultyFilter || exercise.difficulty === difficultyFilter)
     )
   })
   const syncValidation = validateGoogleAppsScriptUrl(settingsDraft.googleAppsScriptUrl)
   const demoExercise = demoExerciseId ? exerciseById.get(demoExerciseId) : undefined
-  const demoMedia = demoExercise ? data.exerciseMedia.find((media) => media.exerciseId === demoExercise.id) : undefined
+  const demoMedia = demoExercise ? getExerciseDemoMedia(demoExercise.id) : undefined
   const ownedEquipmentKinds = new Set(data.equipment.filter((item) => item.owned).map((item) => item.kind))
   const roadmapGuidance = [
     `${data.schedule.weeklyFrequency} planned sessions/week across ${data.schedule.preferredDays.map(dayName).join(', ') || 'flex days'}.`,
@@ -1462,6 +1432,7 @@ function App() {
               {page === 'log' && 'Workout Log'}
               {page === 'carbs' && 'Net Carbs'}
               {page === 'progress' && 'Progress'}
+              {page === 'more' && 'More'}
               {page === 'settings' && 'Settings'}
               {page === 'roadmap' && 'Tour Roadmap'}
             </h1>
@@ -1472,13 +1443,20 @@ function App() {
             <Flame aria-hidden="true" size={18} />
             {streak} day streak
           </div>
-          <button className="icon-button" type="button" aria-label="Open settings" onClick={() => setPage('settings')}>
-            <Settings aria-hidden="true" size={18} />
-          </button>
         </div>
       </header>
 
-      {demoExercise && <ExerciseDemoSheet exercise={demoExercise} media={demoMedia} onClose={() => setDemoExerciseId('')} />}
+      {demoExercise && (
+        <ExerciseDemoView
+          exercise={demoExercise}
+          media={demoMedia}
+          onClose={closeExerciseDemo}
+          onLog={() => {
+            addDraftExercise(demoExercise, { startFreeLog: true })
+            closeExerciseDemo()
+          }}
+        />
+      )}
 
       {flash && (
         <div className="toast" role="status">
@@ -1502,22 +1480,23 @@ function App() {
             )}
           </Card>
 
-          <section className="metric-grid">
-            <Card>
-              <p className="eyebrow">This week</p>
-              <strong className="metric-value">
-                {weeklyCompletions}/{weeklyTarget}
-              </strong>
-              <div className="progress-track">
-                <span style={{ width: `${Math.min(100, (weeklyCompletions / weeklyTarget) * 100)}%` }} />
+          <Card>
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Quick log</p>
+                <h2>Get the useful work recorded</h2>
               </div>
-            </Card>
-            <Card>
-              <p className="eyebrow">Consistency</p>
-              <strong className="metric-value">{streak}</strong>
-              <p>completed days in a row</p>
-            </Card>
-          </section>
+              <ClipboardList aria-hidden="true" size={20} />
+            </div>
+            <div className="button-grid">
+              <button className="ghost-button" type="button" onClick={() => setPage('log')}>
+                Open Log
+              </button>
+              <button className="ghost-button" type="button" onClick={startFreeWorkout}>
+                Free workout
+              </button>
+            </div>
+          </Card>
 
           <Card className="carb-summary-card">
             <div className="section-title">
@@ -1545,39 +1524,15 @@ function App() {
             </button>
           </Card>
 
-          <Card>
-            <div className="section-title">
-              <h2>Next Recommended</h2>
-              <CalendarDays aria-hidden="true" size={20} />
-            </div>
-            {nextRecommendation ? (
-              <div className="split-row">
-                <div>
-                  <strong>{nextRecommendation.routine.name}</strong>
-                  <p>{formatShortDate(nextRecommendation.date)} · {nextRecommendation.routine.estimatedMinutes} min</p>
-                </div>
-                <button className="ghost-button" type="button" onClick={() => startRoutine(nextRecommendation.routine.id)}>
-                  Log
-                </button>
-              </div>
-            ) : (
-              <EmptyState title="No enabled routines" body="Enable a routine from Workouts to get recommendations." />
-            )}
-          </Card>
-
           <Card className="roadmap-card">
             <div className="section-title">
-              <h2>Tour Roadmap</h2>
+              <h2>Next Milestone</h2>
               <MapIcon aria-hidden="true" size={20} />
             </div>
             {nextRoadmapMilestone ? (
               <div className="stack">
-                <p className="eyebrow">Next milestone</p>
                 <strong>{nextRoadmapMilestone.title}</strong>
                 <p>{nextRoadmapMilestone.description}</p>
-                <button className="ghost-button" type="button" onClick={() => setPage('roadmap')}>
-                  Open Roadmap
-                </button>
               </div>
             ) : (
               <EmptyState title="Roadmap complete" body="All seeded milestones are checked off." />
@@ -1613,6 +1568,75 @@ function App() {
         </main>
       )}
 
+      {page === 'more' && (
+        <main className="page-grid">
+          <Card className="more-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">More</p>
+                <h2>Planning and setup</h2>
+              </div>
+              <Menu aria-hidden="true" size={21} />
+            </div>
+            <div className="more-menu-grid">
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkoutsTab('routines')
+                  setPage('workouts')
+                }}
+              >
+                <Dumbbell aria-hidden="true" size={18} />
+                <span>
+                  <strong>Workouts manager</strong>
+                  <small>Routines and plans</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setWorkoutsTab('library')
+                  setPage('workouts')
+                }}
+              >
+                <CircleHelp aria-hidden="true" size={18} />
+                <span>
+                  <strong>Exercise library</strong>
+                  <small>How-to and logging</small>
+                </span>
+              </button>
+              <button type="button" onClick={() => setPage('roadmap')}>
+                <MapIcon aria-hidden="true" size={18} />
+                <span>
+                  <strong>Roadmap</strong>
+                  <small>Full tour prep plan</small>
+                </span>
+              </button>
+              <button type="button" onClick={() => setPage('settings')}>
+                <Settings aria-hidden="true" size={18} />
+                <span>
+                  <strong>Settings</strong>
+                  <small>Equipment, backup, advanced</small>
+                </span>
+              </button>
+            </div>
+          </Card>
+          <Card>
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Advanced</p>
+                <h2>Edit mode</h2>
+              </div>
+              <label className="switch">
+                <input checked={editMode} type="checkbox" onChange={(event) => setEditMode(event.target.checked)} />
+                <span />
+              </label>
+            </div>
+            <p className="notice">Edit, reorder, duplicate, seed, and debug controls stay hidden until edit mode is on.</p>
+          </Card>
+        </main>
+      )}
+
       {page === 'workouts' && (
         <main className="page-grid">
           <div className="segmented">
@@ -1630,65 +1654,62 @@ function App() {
                 {routines.map((routine) => (
                   <Card className={selectedRoutine?.id === routine.id ? 'selected-card' : ''} key={routine.id}>
                     <div className="routine-header">
-                      <button
-                        className="text-button"
-                        type="button"
-                        onClick={() => {
-                          setSelectedRoutineId(routine.id)
-                          setRoutineDraft({ ...routine })
-                        }}
-                      >
+                      <div className="routine-title-block">
                         <span>{routine.name}</span>
                         <small>{routine.type} · {routine.estimatedMinutes} min</small>
-                      </button>
-                      <label className="switch">
-                        <input
-                          checked={routine.enabled}
-                          type="checkbox"
-                          onChange={async (event) => {
-                            await saveRoutine({ ...routine, enabled: event.target.checked })
-                            await refresh()
-                          }}
-                        />
-                        <span />
-                      </label>
+                      </div>
+                      {editMode && (
+                        <label className="switch">
+                          <input
+                            checked={routine.enabled}
+                            type="checkbox"
+                            onChange={async (event) => {
+                              await saveRoutine({ ...routine, enabled: event.target.checked })
+                              await refresh()
+                            }}
+                          />
+                          <span />
+                        </label>
+                      )}
                     </div>
                     <div className="card-actions compact">
                       <button className="primary-button compact-cta" type="button" onClick={() => startRoutine(routine.id)}>
                         Log
                       </button>
-                      <ActionMenu label={`${routine.name} actions`}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedRoutineId(routine.id)
-                            setRoutineDraft({ ...routine })
-                          }}
-                        >
-                          <Pencil aria-hidden="true" size={16} />
-                          Edit routine
-                        </button>
-                        <button type="button" onClick={() => void moveRoutine(routine, -1)}>
-                          <ChevronUp aria-hidden="true" size={16} />
-                          Move up
-                        </button>
-                        <button type="button" onClick={() => void moveRoutine(routine, 1)}>
-                          <ChevronDown aria-hidden="true" size={16} />
-                          Move down
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await duplicateRoutine(routine.id)
-                            await refresh()
-                          }}
-                        >
-                          <Copy aria-hidden="true" size={16} />
-                          Duplicate
-                        </button>
-                      </ActionMenu>
+                      {editMode && (
+                        <ActionMenu label={`${routine.name} actions`}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedRoutineId(routine.id)
+                              setRoutineDraft({ ...routine })
+                            }}
+                          >
+                            <Pencil aria-hidden="true" size={16} />
+                            Edit routine
+                          </button>
+                          <button type="button" onClick={() => void moveRoutine(routine, -1)}>
+                            <ChevronUp aria-hidden="true" size={16} />
+                            Move up
+                          </button>
+                          <button type="button" onClick={() => void moveRoutine(routine, 1)}>
+                            <ChevronDown aria-hidden="true" size={16} />
+                            Move down
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await duplicateRoutine(routine.id)
+                              await refresh()
+                            }}
+                          >
+                            <Copy aria-hidden="true" size={16} />
+                            Duplicate
+                          </button>
+                        </ActionMenu>
+                      )}
                     </div>
-                    <div className="skip-row">
+                    {editMode && <div className="skip-row">
                       <select
                         aria-label={`Skip reason for ${routine.name}`}
                         defaultValue="work"
@@ -1712,12 +1733,12 @@ function App() {
                       >
                         Skip
                       </button>
-                    </div>
+                    </div>}
                   </Card>
                 ))}
               </section>
 
-              {activeRoutineDraft && selectedRoutine && (
+              {editMode && activeRoutineDraft && selectedRoutine && (
                 <Card>
                   <div className="section-title">
                     <h2>Edit Routine</h2>
@@ -1768,7 +1789,7 @@ function App() {
                             </select>
                             <div className="row-meta-actions">
                               <small>{prescription(entry, exercise)}</small>
-                              {exercise && <ExerciseDemoButton exercise={exercise} onOpen={setDemoExerciseId} compact />}
+                              {exercise && <ExerciseDemoButton exercise={exercise} onOpen={openExerciseDemo} compact />}
                             </div>
                           </div>
                           <div className="mini-stepper-grid">
@@ -1857,89 +1878,154 @@ function App() {
           {workoutsTab === 'library' && (
             <>
               <Card>
-                <label>
-                  <span>
-                    <Search aria-hidden="true" size={15} /> Search
-                  </span>
-                  <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="core, back, dumbbell..." />
-                </label>
-                <CategoryChips value={categoryFilter} onChange={setCategoryFilter} />
-                <div className="form-grid filter-grid">
+                <div className="library-search-row">
                   <label>
-                    Group
-                    <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
-                      <option value="">All groups</option>
-                      {exerciseGroups.map((group) => (
-                        <option key={`library-group-${group}`} value={group}>
-                          {group}
-                        </option>
-                      ))}
-                    </select>
+                    <span>
+                      <Search aria-hidden="true" size={15} /> Search
+                    </span>
+                    <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="core, back, dumbbell..." />
                   </label>
-                  <label>
-                    Equipment
-                    <select value={equipmentFilter} onChange={(event) => setEquipmentFilter(event.target.value)}>
-                      <option value="">All equipment</option>
-                      {equipmentKinds.map((kind) => (
-                        <option key={`library-equipment-${kind}`} value={kind}>
-                          {kind}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Bike-tour purpose
-                    <select value={purposeFilter} onChange={(event) => setPurposeFilter(event.target.value)}>
-                      <option value="">All purposes</option>
-                      {bikePurposes.map((purpose) => (
-                        <option key={`library-purpose-${purpose}`} value={purpose}>
-                          {purpose}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+                  <button className="ghost-button filter-button" type="button" onClick={() => setLibraryFiltersOpen(true)}>
+                    <Filter aria-hidden="true" size={18} />
+                    Filter
+                  </button>
                 </div>
+                {(categoryFilter || groupFilter || equipmentFilter || purposeFilter || difficultyFilter) && (
+                  <div className="active-filter-row">
+                    <span className="tag">Filters on</span>
+                    <button
+                      className="text-icon-button"
+                      type="button"
+                      onClick={() => {
+                        setCategoryFilter('')
+                        setGroupFilter('')
+                        setEquipmentFilter('')
+                        setPurposeFilter('')
+                        setDifficultyFilter('')
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
               </Card>
+              {libraryFiltersOpen && (
+                <div className="sheet-backdrop picker-backdrop" role="presentation" onClick={() => setLibraryFiltersOpen(false)}>
+                  <section className="filter-sheet" role="dialog" aria-modal="true" aria-labelledby="filter-title" onClick={(event) => event.stopPropagation()}>
+                    <div className="section-title">
+                      <div>
+                        <p className="eyebrow">Library</p>
+                        <h2 id="filter-title">Filters</h2>
+                      </div>
+                      <button className="icon-button" type="button" aria-label="Close filters" onClick={() => setLibraryFiltersOpen(false)}>
+                        <X aria-hidden="true" size={18} />
+                      </button>
+                    </div>
+                    <label>
+                      Purpose
+                      <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value as FunctionalCategory | '')}>
+                        <option value="">All purposes</option>
+                        {functionalCategories.map((category) => (
+                          <option key={`category-${category}`} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Group
+                      <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
+                        <option value="">All groups</option>
+                        {exerciseGroups.map((group) => (
+                          <option key={`library-group-${group}`} value={group}>
+                            {group}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Equipment
+                      <select value={equipmentFilter} onChange={(event) => setEquipmentFilter(event.target.value)}>
+                        <option value="">All equipment</option>
+                        {equipmentKinds.map((kind) => (
+                          <option key={`library-equipment-${kind}`} value={kind}>
+                            {kind}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Bike-tour purpose
+                      <select value={purposeFilter} onChange={(event) => setPurposeFilter(event.target.value)}>
+                        <option value="">All bike-tour purposes</option>
+                        {bikePurposes.map((purpose) => (
+                          <option key={`library-purpose-${purpose}`} value={purpose}>
+                            {purpose}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Difficulty
+                      <select value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}>
+                        <option value="">All difficulties</option>
+                        <option value="beginner">beginner</option>
+                        <option value="intermediate">intermediate</option>
+                        <option value="advanced">advanced</option>
+                      </select>
+                    </label>
+                    <div className="button-grid">
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() => {
+                          setCategoryFilter('')
+                          setGroupFilter('')
+                          setEquipmentFilter('')
+                          setPurposeFilter('')
+                          setDifficultyFilter('')
+                        }}
+                      >
+                        Clear
+                      </button>
+                      <button className="primary-button" type="button" onClick={() => setLibraryFiltersOpen(false)}>
+                        Done
+                      </button>
+                    </div>
+                  </section>
+                </div>
+              )}
               <section className="library-grid">
                 {filteredExercises.map((exercise) => (
                   <Card key={exercise.id} className="exercise-card">
-                    <button className="exercise-card-main" type="button" onClick={() => setDemoExerciseId(exercise.id)}>
-                      <ExerciseMotion exercise={exercise} />
+                    <div className="exercise-card-main">
                       <div>
-                        <p className="eyebrow">{getExerciseCategory(exercise)}</p>
+                        <span className="tag">{exercise.group ?? getExerciseCategory(exercise)}</span>
                         <h2>{exercise.name}</h2>
-                        <p>{exercise.description}</p>
-                        <div className="tag-row">
-                          {[...(exercise.bikeTourPurpose ?? []), ...exercise.targetAreas].slice(0, 4).map((target, tagIndex) => (
-                            <span className="tag" key={`${exercise.id}-${target}-${tagIndex}`}>
-                              {target}
-                            </span>
-                          ))}
-                        </div>
-                        <small>{data.exerciseMedia.find((media) => media.exerciseId === exercise.id)?.attributionText ?? exercise.attribution}</small>
+                        <p>{exercise.purpose ?? exercise.description}</p>
+                        <small>{isVerifiedDemoMedia(getExerciseDemoMedia(exercise.id)) ? 'Verified source attached' : 'No verified demo yet'}</small>
                       </div>
-                    </button>
+                    </div>
                     <div className="card-actions compact">
+                      <ExerciseDemoButton exercise={exercise} onOpen={openExerciseDemo} />
                       <button className="primary-button compact-cta" type="button" onClick={() => addDraftExercise(exercise, { startFreeLog: true })}>
                         <Plus aria-hidden="true" size={17} />
-                        Add to Log
+                        Log
                       </button>
-                      <ActionMenu label={`${exercise.name} actions`}>
-                        <button type="button" onClick={() => setDemoExerciseId(exercise.id)}>
-                          <CircleHelp aria-hidden="true" size={16} />
-                          How to
-                        </button>
-                        <button type="button" onClick={() => setExerciseDraft({ ...exercise })}>
-                          <Pencil aria-hidden="true" size={16} />
-                          Edit exercise
-                        </button>
-                      </ActionMenu>
+                      {editMode && (
+                        <ActionMenu label={`${exercise.name} actions`}>
+                          <button type="button" onClick={() => setExerciseDraft({ ...exercise })}>
+                            <Pencil aria-hidden="true" size={16} />
+                            Edit exercise
+                          </button>
+                        </ActionMenu>
+                      )}
                     </div>
                   </Card>
                 ))}
               </section>
 
-              {exerciseDraft && (
+              {editMode && exerciseDraft && (
                 <Card>
                   <div className="section-title">
                     <h2>Edit Exercise</h2>
@@ -2116,7 +2202,6 @@ function App() {
               </span>
               <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="anti-rotation, trailer, row..." />
             </label>
-            <CategoryChips value={categoryFilter} onChange={setCategoryFilter} />
             <div className="form-grid">
               <label>
                 Search/select
@@ -2162,7 +2247,7 @@ function App() {
                   <div className="section-title">
                     <h2>{entry.exerciseName}</h2>
                     <div className="compact-action-row">
-                      {exercise && <ExerciseDemoButton exercise={exercise} onOpen={setDemoExerciseId} compact />}
+                      {exercise && <ExerciseDemoButton exercise={exercise} onOpen={openExerciseDemo} compact />}
                       <span className="tag">effort {entry.effort ?? '-'}</span>
                     </div>
                   </div>
@@ -2260,7 +2345,7 @@ function App() {
                       onChange={(value) => setDraftEntries((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, effort: value } : item)))}
                     />
                   </div>
-                  <div className="toolbar">
+                  {editMode && <div className="toolbar">
                     <button
                       className="ghost-button"
                       type="button"
@@ -2344,7 +2429,7 @@ function App() {
                     >
                       Apply to all
                     </button>
-                  </div>
+                  </div>}
                   {entry.exerciseId === 'burley-loaded-trailer-ride' && (
                     <div className="burley-panel">
                       <p className="notice">Dog comfort is mandatory. Avoid heat, traffic, excessive speed, and hard hill repeats with the dog.</p>
@@ -2464,7 +2549,7 @@ function App() {
             </div>
           </Card>
 
-          {editLog && (
+          {editMode && editLog && (
             <Card>
               <div className="section-title">
                 <h2>Edit Past Log</h2>
@@ -2483,7 +2568,7 @@ function App() {
                 <div className="exercise-edit-row" key={entry.id}>
                   <div className="section-title">
                     <strong>{entry.exerciseName}</strong>
-                    {exerciseById.get(entry.exerciseId) && <ExerciseDemoButton exercise={exerciseById.get(entry.exerciseId)!} onOpen={setDemoExerciseId} compact />}
+                    {exerciseById.get(entry.exerciseId) && <ExerciseDemoButton exercise={exerciseById.get(entry.exerciseId)!} onOpen={openExerciseDemo} compact />}
                   </div>
                   <div className="mini-stepper-grid">
                     <NumberStepper
@@ -2539,24 +2624,6 @@ function App() {
             </div>
             <div className="progress-track">
               <span style={{ width: `${Math.min(100, (carbReports.today.total / Math.max(1, carbReports.today.goal)) * 100)}%` }} />
-            </div>
-            <div className="mini-stepper-grid">
-              <NumberStepper
-                label="Daily goal"
-                value={carbSettingsDraft.dailyNetCarbGoalGrams}
-                min={0}
-                max={400}
-                suffix="g"
-                quickOptions={[20, 30, 50, 75, 100]}
-                quickIncrements={[1, 5, 10]}
-                onChange={(value) =>
-                  setCarbSettingsDraft({ ...carbSettingsDraft, dailyNetCarbGoalGrams: normalizeCarbGrams(value) })
-                }
-              />
-              <button className="ghost-button" type="button" onClick={() => void handleSaveCarbSettings()}>
-                <Save aria-hidden="true" size={18} />
-                Save goal
-              </button>
             </div>
           </Card>
 
@@ -2684,7 +2751,7 @@ function App() {
                                     {entry.savedFoodName ? ` · ${entry.savedFoodName}` : ''}
                                   </p>
                                 </div>
-                                <div className="toolbar">
+                                {editMode && <div className="toolbar">
                                   <button className="icon-button" type="button" aria-label="Edit net carb entry" onClick={() => setCarbEditEntry(entry)}>
                                     <Pencil aria-hidden="true" size={18} />
                                   </button>
@@ -2695,12 +2762,12 @@ function App() {
                                     onClick={async () => {
                                       await deleteCarbEntry(entry.id)
                                       await refresh()
-                showFlash('Net carb entry deleted.')
+                                      showFlash('Net carb entry deleted.')
                                     }}
                                   >
                                     <Trash2 aria-hidden="true" size={18} />
                                   </button>
-                                </div>
+                                </div>}
                               </>
                             )}
                           </div>
@@ -2715,7 +2782,21 @@ function App() {
             </div>
           </Card>
 
-          <Card className="lookup-card">
+          <Card>
+            <div className="button-grid">
+              <button className={carbPanel === 'lookup' ? 'primary-button' : 'ghost-button'} type="button" onClick={() => setCarbPanel(carbPanel === 'lookup' ? 'none' : 'lookup')}>
+                Food lookup
+              </button>
+              <button className={carbPanel === 'presets' ? 'primary-button' : 'ghost-button'} type="button" onClick={() => setCarbPanel(carbPanel === 'presets' ? 'none' : 'presets')}>
+                Presets
+              </button>
+              <button className={carbPanel === 'reports' ? 'primary-button' : 'ghost-button'} type="button" onClick={() => setCarbPanel(carbPanel === 'reports' ? 'none' : 'reports')}>
+                Reports
+              </button>
+            </div>
+          </Card>
+
+          {carbPanel === 'lookup' && <Card className="lookup-card">
             <div className="section-title">
               <div>
                 <p className="eyebrow">Optional lookup</p>
@@ -2796,9 +2877,9 @@ function App() {
                 </div>
               </div>
             )}
-          </Card>
+          </Card>}
 
-          <Card className="preset-card">
+          {carbPanel === 'presets' && <Card className="preset-card">
             <div className="section-title">
               <div>
                 <p className="eyebrow">Shortcuts</p>
@@ -2848,33 +2929,37 @@ function App() {
                       <button className="ghost-button" type="button" onClick={() => void handleUsePreset(preset)}>
                         Use
                       </button>
-                      <button
-                        className="icon-button"
-                        type="button"
-                        aria-label="Edit preset"
-                        onClick={() =>
-                          setPresetDraft({
-                            id: preset.id,
-                            name: preset.name,
-                            netCarbs: preset.netCarbs,
-                            servingDescription: preset.servingDescription ?? '',
-                          })
-                        }
-                      >
-                        <Pencil aria-hidden="true" size={18} />
-                      </button>
-                      <button
-                        className="icon-button danger"
-                        type="button"
-                        aria-label="Delete preset"
-                        onClick={async () => {
-                          await deleteCarbPreset(preset.id)
-                          await refresh()
-                          showFlash('Preset deleted.')
-                        }}
-                      >
-                        <Trash2 aria-hidden="true" size={18} />
-                      </button>
+                      {editMode && (
+                        <>
+                          <button
+                            className="icon-button"
+                            type="button"
+                            aria-label="Edit preset"
+                            onClick={() =>
+                              setPresetDraft({
+                                id: preset.id,
+                                name: preset.name,
+                                netCarbs: preset.netCarbs,
+                                servingDescription: preset.servingDescription ?? '',
+                              })
+                            }
+                          >
+                            <Pencil aria-hidden="true" size={18} />
+                          </button>
+                          <button
+                            className="icon-button danger"
+                            type="button"
+                            aria-label="Delete preset"
+                            onClick={async () => {
+                              await deleteCarbPreset(preset.id)
+                              await refresh()
+                              showFlash('Preset deleted.')
+                            }}
+                          >
+                            <Trash2 aria-hidden="true" size={18} />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -2882,9 +2967,9 @@ function App() {
             ) : (
               <EmptyState title="No presets yet" body="Save a frequent entry as a lightweight shortcut." />
             )}
-          </Card>
+          </Card>}
 
-          <Card className="carb-reports-card">
+          {carbPanel === 'reports' && <Card className="carb-reports-card">
             <div className="section-title">
               <div>
                 <p className="eyebrow">Reports</p>
@@ -2961,7 +3046,7 @@ function App() {
                 </div>
               ))}
             </div>
-          </Card>
+          </Card>}
         </main>
       )}
 
@@ -3118,7 +3203,7 @@ function App() {
                             <small>{milestone.description}</small>
                           </span>
                         </label>
-                        <div className="toolbar">
+                        {editMode && <div className="toolbar">
                           <button
                             className="icon-button"
                             type="button"
@@ -3155,7 +3240,7 @@ function App() {
                           >
                             <ChevronDown aria-hidden="true" size={18} />
                           </button>
-                        </div>
+                        </div>}
                       </div>
                     ))}
                   </div>
@@ -3163,7 +3248,7 @@ function App() {
               )
             })}
 
-          <Card>
+          {editMode && <Card>
             <div className="section-title">
               <h2>Job/Life Conflicts</h2>
               <CalendarDays aria-hidden="true" size={20} />
@@ -3222,7 +3307,7 @@ function App() {
                 </div>
               </div>
             ))}
-          </Card>
+          </Card>}
         </main>
       )}
 
@@ -3363,24 +3448,40 @@ function App() {
                 <Download aria-hidden="true" size={18} />
                 Net Carb CSV
               </button>
-              <button
-                className="danger-button"
-                type="button"
-                onClick={async () => {
-                  if (window.confirm('Delete all net carb entries? Presets and workout data stay intact.')) {
-                    await deleteAllCarbEntries()
-                    await refresh()
-                    showFlash('Net carb entries deleted.')
-                  }
-                }}
-              >
-                <Trash2 aria-hidden="true" size={18} />
-                Delete net carbs
-              </button>
+              {editMode && (
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={async () => {
+                    if (window.confirm('Delete all net carb entries? Presets and workout data stay intact.')) {
+                      await deleteAllCarbEntries()
+                      await refresh()
+                      showFlash('Net carb entries deleted.')
+                    }
+                  }}
+                >
+                  <Trash2 aria-hidden="true" size={18} />
+                  Delete net carbs
+                </button>
+              )}
             </div>
           </Card>
 
           <Card>
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Advanced</p>
+                <h2>Edit mode</h2>
+              </div>
+              <label className="switch">
+                <input checked={editMode} type="checkbox" onChange={(event) => setEditMode(event.target.checked)} />
+                <span />
+              </label>
+            </div>
+            <p className="notice">Shows routine editing, reorder controls, milestone editing, and other infrequent management actions.</p>
+          </Card>
+
+          {editMode && <Card>
             <h2>Plan Editor</h2>
             <div className="form-grid">
               <label>
@@ -3537,7 +3638,7 @@ function App() {
               <Save aria-hidden="true" size={18} />
               Save Plan
             </button>
-          </Card>
+          </Card>}
 
           <Card>
             <h2>Suggested Equipment</h2>
@@ -3593,20 +3694,22 @@ function App() {
                 Import
                 <input accept="application/json" type="file" onChange={(event) => void handleImport(event.target.files?.[0])} />
               </label>
-              <button
-                className="danger-button"
-                type="button"
-                onClick={async () => {
-                  if (window.confirm('Reset all app data back to demo defaults?')) {
-                    await resetDemoData()
-                    await refresh()
-                    showFlash('Demo data reset.')
-                  }
-                }}
-              >
-                <RefreshCcw aria-hidden="true" size={18} />
-                Reset
-              </button>
+              {editMode && (
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={async () => {
+                    if (window.confirm('Reset all app data back to demo defaults?')) {
+                      await resetDemoData()
+                      await refresh()
+                      showFlash('Demo data reset.')
+                    }
+                  }}
+                >
+                  <RefreshCcw aria-hidden="true" size={18} />
+                  Reset
+                </button>
+              )}
             </div>
           </Card>
 
@@ -3625,11 +3728,11 @@ function App() {
       )}
 
       <nav className="bottom-nav" aria-label="Primary">
-        {navItems.map((item) => {
-          const Icon = item.icon
+        {primaryNavItems.map((item) => {
+          const Icon = navIconByPage[item.page]
           return (
             <button
-              className={page === item.page ? 'active' : ''}
+              className={page === item.page || (item.page === 'more' && ['workouts', 'settings', 'roadmap'].includes(page)) ? 'active' : ''}
               key={item.page}
               type="button"
               onClick={() => {
