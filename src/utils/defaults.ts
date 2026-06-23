@@ -1,5 +1,22 @@
 import type { Exercise, ExerciseLogEntry, PersonalExerciseDefault, RoutineExercise, WorkoutLog } from '../types'
 
+export const normalizeEquipmentKey = (equipment?: string[]) =>
+  equipment?.length ? [...equipment].sort((a, b) => a.localeCompare(b)).join('+') : 'bodyweight'
+
+export const exerciseEquipmentKey = (exercise?: Pick<Exercise, 'equipment'>) => normalizeEquipmentKey(exercise?.equipment)
+
+export const defaultKeyForExercise = (exerciseId: string, equipmentKey?: string) =>
+  `default-${exerciseId}-${equipmentKey ?? 'bodyweight'}`
+
+export const personalDefaultForExercise = (
+  defaults: PersonalExerciseDefault[],
+  exerciseId: string,
+  equipmentKey?: string,
+) =>
+  defaults.find((item) => item.exerciseId === exerciseId && item.equipmentKey === equipmentKey) ??
+  defaults.find((item) => item.id === defaultKeyForExercise(exerciseId, equipmentKey)) ??
+  defaults.find((item) => item.id === `default-${exerciseId}`)
+
 export const firstNumber = (value?: string | number) => {
   if (value == null) {
     return undefined
@@ -29,6 +46,7 @@ export const mostRecentCompletedEntry = (
   exerciseId: string,
   entries: ExerciseLogEntry[],
   logs: WorkoutLog[],
+  equipmentKey?: string,
 ) => {
   const completedLogById = new Map(
     logs
@@ -38,7 +56,12 @@ export const mostRecentCompletedEntry = (
   )
 
   return entries
-    .filter((entry) => entry.exerciseId === exerciseId && completedLogById.has(entry.workoutLogId))
+    .filter(
+      (entry) =>
+        entry.exerciseId === exerciseId &&
+        completedLogById.has(entry.workoutLogId) &&
+        (!equipmentKey || !entry.equipmentKey || entry.equipmentKey === equipmentKey),
+    )
     .sort((a, b) => {
       const logA = completedLogById.get(a.workoutLogId)?.completedAt ?? ''
       const logB = completedLogById.get(b.workoutLogId)?.completedAt ?? ''

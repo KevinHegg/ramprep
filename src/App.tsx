@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   Activity,
   BarChart3,
@@ -14,6 +14,7 @@ import {
   Dumbbell,
   Flame,
   Map as MapIcon,
+  MoreVertical,
   Pencil,
   Plus,
   RefreshCcw,
@@ -81,7 +82,13 @@ import {
   isDeloadWeek,
 } from './utils/schedule'
 import { formatShortDate, toDateKey } from './utils/date'
-import { firstNumber, mostRecentCompletedEntry, resolveExerciseLogDefaults } from './utils/defaults'
+import {
+  exerciseEquipmentKey,
+  firstNumber,
+  mostRecentCompletedEntry,
+  personalDefaultForExercise,
+  resolveExerciseLogDefaults,
+} from './utils/defaults'
 import { functionalCategories, getExerciseCategory, type FunctionalCategory } from './utils/exerciseCategories'
 import {
   buildCarbReports,
@@ -131,7 +138,18 @@ const navItems: Array<{ page: Page; label: string; icon: typeof Activity }> = [
 
 const skipReasons: SkipReason[] = ['work', 'travel', 'fatigue', 'soreness', 'illness', 'no time', 'other']
 const equipmentKinds: EquipmentKind[] = ['bodyweight', 'dumbbell', 'kettlebell', 'band', 'yoga mat', 'carry', 'bike', 'trailer', 'chair', 'foam roller', 'suspension trainer', 'pull-up bar']
-const exerciseGroups: ExerciseGroup[] = ['Core', 'Back and Posture', 'Hinge and Posterior Chain', 'Legs and Hill Climbing', 'Carries and Loaded Conditioning', 'Mobility and Yoga', 'Bike and Outdoor Conditioning', 'Recovery and Prehab']
+const exerciseGroups: ExerciseGroup[] = [
+  'Mobility & Yoga',
+  'Core Stability',
+  'Upper Back & Posture',
+  'Hinge & Posterior Chain',
+  'Single-Leg Strength',
+  'Carry & Load Transfer',
+  'Balance & Control',
+  'Recovery',
+  'Burley & Trailer Work',
+  'Ride Sessions',
+]
 const bikePurposes: BikeTourPurpose[] = ['anti-extension', 'anti-rotation', 'lateral stability', 'upper back', 'posterior chain', 'hill climbing', 'loaded-bike durability', 'mobility', 'recovery', 'ride conditioning', 'trailer handling']
 const emptyRoutines: Routine[] = []
 const emptyExercises: Exercise[] = []
@@ -178,6 +196,22 @@ const formatDuration = (seconds?: number) => {
   return `${minutes} min`
 }
 
+const uniqueNumbers = (values: number[]) =>
+  [...new Set(values.map((value) => Number(value.toFixed(2))))].sort((a, b) => a - b)
+
+const pickerOptionsFor = (min: number, max: number, step: number, quickOptions?: number[]) => {
+  const boundedQuickOptions = quickOptions?.filter((option) => option >= min && option <= max) ?? []
+  const span = max - min
+  const coarseStep = span > 1000 ? 300 : span > 300 ? 25 : span > 80 ? 10 : step
+  const generated: number[] = []
+
+  for (let value = min; value <= max && generated.length < 80; value += coarseStep) {
+    generated.push(value)
+  }
+
+  return uniqueNumbers([...boundedQuickOptions, ...generated, min, max])
+}
+
 const carbStatusText = (total: number, goal: number) => {
   const remaining = goal - total
   if (remaining > 0) {
@@ -205,7 +239,6 @@ const buildDraftEntries = (
 ): WorkoutDraftEntry[] => {
   const exerciseByName = new Map(data.exercises.map((exercise) => [exercise.name, exercise]))
   const exerciseById = new Map(data.exercises.map((exercise) => [exercise.id, exercise]))
-  const personalByExercise = new Map(data.personalExerciseDefaults.map((item) => [item.exerciseId, item]))
 
   return data.routineExercises
     .filter((entry) => entry.routineId === routine.id)
@@ -214,13 +247,14 @@ const buildDraftEntries = (
       const exercise = entry.variationOptions?.[0]
         ? exerciseByName.get(entry.variationOptions[0]) ?? exerciseById.get(entry.exerciseId)
         : exerciseById.get(entry.exerciseId)
+      const equipmentKey = exerciseEquipmentKey(exercise)
       const sets = entry.sets ?? exercise?.defaults.sets
       const adjustedSets = deloadApplied && sets && sets > 1 ? Math.max(1, Math.round(sets * 0.7)) : sets
-      const recentEntry = mostRecentCompletedEntry(exercise?.id ?? entry.exerciseId, data.exerciseLogEntries, data.workoutLogs)
+      const recentEntry = mostRecentCompletedEntry(exercise?.id ?? entry.exerciseId, data.exerciseLogEntries, data.workoutLogs, equipmentKey)
       const remembered = resolveExerciseLogDefaults({
         exercise,
         routineExercise: { ...entry, sets: adjustedSets },
-        personalDefault: personalByExercise.get(exercise?.id ?? entry.exerciseId),
+        personalDefault: personalDefaultForExercise(data.personalExerciseDefaults, exercise?.id ?? entry.exerciseId, equipmentKey),
         recentEntry,
         units: data.settings.units,
       })
@@ -228,6 +262,7 @@ const buildDraftEntries = (
       return {
         routineExerciseId: entry.id,
         exerciseId: exercise?.id ?? entry.exerciseId,
+        equipmentKey,
         exerciseName: exercise?.name ?? 'exercise',
         sets: remembered.sets,
         reps: remembered.reps,
@@ -250,6 +285,15 @@ const EmptyState = ({ title, body }: { title: string; body: string }) => (
     <p className="eyebrow">{title}</p>
     <p>{body}</p>
   </div>
+)
+
+const ActionMenu = ({ label, children }: { label: string; children: ReactNode }) => (
+  <details className="action-menu">
+    <summary aria-label={label}>
+      <MoreVertical aria-hidden="true" size={18} />
+    </summary>
+    <div className="action-menu-panel">{children}</div>
+  </details>
 )
 
 const BarList = ({ data, unit = '' }: { data: BarDatum[]; unit?: string }) => {
@@ -277,29 +321,6 @@ const BarList = ({ data, unit = '' }: { data: BarDatum[]; unit?: string }) => {
   )
 }
 
-const NumberWheelPicker = ({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string
-  value?: number
-  options: number[]
-  onChange: (value: number) => void
-}) => (
-  <details className="wheel-picker">
-    <summary>{label} quick picks</summary>
-    <div>
-      {options.map((option) => (
-        <button className={option === value ? 'active' : ''} key={`${label}-${option}`} type="button" onClick={() => onChange(option)}>
-          {option}
-        </button>
-      ))}
-    </div>
-  </details>
-)
-
 const NumberStepper = ({
   label,
   value,
@@ -321,9 +342,47 @@ const NumberStepper = ({
   quickOptions?: number[]
   quickIncrements?: number[]
 }) => {
+  const [pickerOpen, setPickerOpen] = useState(false)
   const current = value ?? min
   const clamp = (next: number) => Math.max(min, Math.min(max, Number(next.toFixed(2))))
   const increments = quickIncrements ?? [step, step * 5, step * 10].filter((item, index, array) => item > 0 && array.indexOf(item) === index)
+  const pickerOptions = pickerOptionsFor(min, max, step, quickOptions)
+  const repeatRef = useRef<{ timeout?: number; interval?: number; repeated: boolean }>({ repeated: false })
+  const valueRef = useRef(current)
+
+  useEffect(() => {
+    valueRef.current = value ?? min
+  }, [min, value])
+
+  const updateBy = (delta: number) => onChange(clamp(valueRef.current + delta))
+
+  const stopRepeat = () => {
+    if (repeatRef.current.timeout) {
+      window.clearTimeout(repeatRef.current.timeout)
+    }
+    if (repeatRef.current.interval) {
+      window.clearInterval(repeatRef.current.interval)
+    }
+    repeatRef.current.timeout = undefined
+    repeatRef.current.interval = undefined
+  }
+
+  const startRepeat = (delta: number) => {
+    stopRepeat()
+    updateBy(delta)
+    repeatRef.current.repeated = false
+    repeatRef.current.timeout = window.setTimeout(() => {
+      repeatRef.current.repeated = true
+      repeatRef.current.interval = window.setInterval(() => updateBy(delta), 120)
+    }, 360)
+  }
+
+  useEffect(
+    () => () => {
+      stopRepeat()
+    },
+    [],
+  )
 
   return (
     <div className="stepper-control">
@@ -335,16 +394,38 @@ const NumberStepper = ({
         </strong>
       </div>
       <div className="stepper-row">
-        <button type="button" onClick={() => onChange(clamp(current - step))}>
+        <button
+          type="button"
+          aria-label={`Decrease ${label}`}
+          onPointerCancel={stopRepeat}
+          onPointerDown={() => startRepeat(-step)}
+          onPointerLeave={stopRepeat}
+          onPointerUp={stopRepeat}
+          onClick={(event) => {
+            if (event.detail === 0) {
+              updateBy(-step)
+            }
+          }}
+        >
           -
         </button>
-        <input
-          inputMode="decimal"
-          value={value ?? ''}
-          onChange={(event) => onChange(numberOrUndefined(event.target.value))}
-          placeholder="tap"
-        />
-        <button type="button" onClick={() => onChange(clamp(current + step))}>
+        <button className="stepper-value" type="button" onClick={() => setPickerOpen(true)} aria-label={`Pick ${label}`}>
+          {value ?? 'Tap'}
+          {value != null ? suffix : ''}
+        </button>
+        <button
+          type="button"
+          aria-label={`Increase ${label}`}
+          onPointerCancel={stopRepeat}
+          onPointerDown={() => startRepeat(step)}
+          onPointerLeave={stopRepeat}
+          onPointerUp={stopRepeat}
+          onClick={(event) => {
+            if (event.detail === 0) {
+              updateBy(step)
+            }
+          }}
+        >
           +
         </button>
       </div>
@@ -355,13 +436,69 @@ const NumberStepper = ({
           </button>
         ))}
       </div>
-      {quickOptions?.length ? <NumberWheelPicker label={label} value={value} options={quickOptions} onChange={onChange} /> : null}
+      {quickOptions?.length ? (
+        <div className="quick-chip-row" aria-label={`${label} quick picks`}>
+          {quickOptions.map((option) => (
+            <button className={option === value ? 'active' : ''} key={`${label}-${option}`} type="button" onClick={() => onChange(option)}>
+              {option}
+              {suffix}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {pickerOpen && (
+        <div className="sheet-backdrop picker-backdrop" role="presentation" onClick={() => setPickerOpen(false)}>
+          <section className="number-picker-sheet" role="dialog" aria-modal="true" aria-labelledby={`${label}-picker-title`} onClick={(event) => event.stopPropagation()}>
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Picker</p>
+                <h2 id={`${label}-picker-title`}>{label}</h2>
+              </div>
+              <button className="icon-button" type="button" aria-label={`Close ${label} picker`} onClick={() => setPickerOpen(false)}>
+                <X aria-hidden="true" size={18} />
+              </button>
+            </div>
+            <div className="picker-wheel" role="listbox" aria-label={`${label} values`}>
+              {pickerOptions.map((option) => (
+                <button
+                  className={option === value ? 'active' : ''}
+                  key={`${label}-picker-${option}`}
+                  type="button"
+                  role="option"
+                  aria-selected={option === value}
+                  onClick={() => onChange(option)}
+                >
+                  {option}
+                  {suffix}
+                </button>
+              ))}
+            </div>
+            <label>
+              Exact value
+              <input inputMode="decimal" value={value ?? ''} onChange={(event) => onChange(numberOrUndefined(event.target.value))} />
+            </label>
+            <button className="primary-button" type="button" onClick={() => setPickerOpen(false)}>
+              Done
+            </button>
+          </section>
+        </div>
+      )}
     </div>
   )
 }
 
-const WeightPicker = ({ units, value, onChange }: { units: string; value?: number; onChange: (value: number | undefined) => void }) => (
-  <NumberStepper label="Weight" value={value} min={0} max={500} step={units === 'kg' ? 2.5 : 5} suffix={` ${units}`} quickOptions={units === 'kg' ? [0, 8, 12, 16, 20, 24, 32] : [0, 20, 25, 30, 35, 40, 45, 53]} quickIncrements={units === 'kg' ? [1, 2.5, 5] : [5, 10, 25]} onChange={onChange} />
+const WeightPicker = ({
+  units,
+  value,
+  onChange,
+  label = 'Weight',
+}: {
+  units: string
+  value?: number
+  onChange: (value: number | undefined) => void
+  label?: string
+}) => (
+  <NumberStepper label={label} value={value} min={0} max={500} step={units === 'kg' ? 2.5 : 5} suffix={` ${units}`} quickOptions={units === 'kg' ? [0, 8, 12, 16, 20, 24, 32] : [0, 20, 25, 30, 35, 40, 45, 53]} quickIncrements={units === 'kg' ? [1, 2.5, 5] : [5, 10, 25]} onChange={onChange} />
 )
 
 const DurationPicker = ({ label = 'Seconds', value, onChange }: { label?: string; value?: number; onChange: (value: number | undefined) => void }) => (
@@ -369,19 +506,17 @@ const DurationPicker = ({ label = 'Seconds', value, onChange }: { label?: string
 )
 
 const EffortPicker = ({ value, onChange }: { value?: number; onChange: (value: number | undefined) => void }) => (
-  <div className="effort-picker">
-    <div className="stepper-head">
-      <span>Effort</span>
-      <strong>{value ?? 6}/10</strong>
-    </div>
-    <div className="effort-row">
-      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((level) => (
-        <button className={level === value ? 'active' : ''} key={level} type="button" onClick={() => onChange(level)}>
-          {level}
-        </button>
-      ))}
-    </div>
-  </div>
+  <NumberStepper
+    label="RPE"
+    value={value}
+    min={1}
+    max={10}
+    step={1}
+    suffix="/10"
+    quickOptions={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+    quickIncrements={[1, 2]}
+    onChange={onChange}
+  />
 )
 
 type ExerciseMotionKind = 'mobility' | 'core' | 'hinge' | 'single-leg' | 'pull' | 'carry' | 'bike'
@@ -575,6 +710,14 @@ const ExerciseDemoSheet = ({
         <span className="tag">{exercise.difficulty}</span>
       </div>
       <div className="demo-section">
+        <h3>Purpose</h3>
+        <p>{exercise.purpose ?? exercise.description}</p>
+      </div>
+      <div className="demo-section">
+        <h3>Setup</h3>
+        <p>{exercise.setup ?? exercise.instructions[0]}</p>
+      </div>
+      <div className="demo-section">
         <h3>Steps</h3>
         <ol>
           {exercise.instructions.map((step, stepIndex) => (
@@ -591,15 +734,53 @@ const ExerciseDemoSheet = ({
         <p>{exercise.equipment.join(', ') || 'none'}</p>
       </div>
       <div className="demo-section">
-        <h3>Form cues</h3>
+        <h3>Coaching cues</h3>
         <ul>
-          {exercise.formCues.slice(0, 4).map((cue, cueIndex) => (
+          {exercise.formCues.map((cue, cueIndex) => (
             <li key={`${exercise.id}-cue-${cueIndex}`}>{cue}</li>
           ))}
         </ul>
       </div>
+      <div className="demo-section">
+        <h3>Common mistakes</h3>
+        <ul>
+          {exercise.commonMistakes.map((mistake, mistakeIndex) => (
+            <li key={`${exercise.id}-mistake-${mistakeIndex}`}>{mistake}</li>
+          ))}
+        </ul>
+      </div>
+      <div className="demo-section two-column-section">
+        <div>
+          <h3>Regressions</h3>
+          <ul>
+            {(exercise.regressions ?? ['Reduce range, load, or time until each rep is clean.']).map((regression, regressionIndex) => (
+              <li key={`${exercise.id}-regression-${regressionIndex}`}>{regression}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3>Progressions</h3>
+          <ul>
+            {(exercise.progressions ?? ['Add load, time, or range only after form is repeatable.']).map((progression, progressionIndex) => (
+              <li key={`${exercise.id}-progression-${progressionIndex}`}>{progression}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="demo-section">
+        <h3>Dose</h3>
+        <p>{exercise.dose ?? prescription({ id: 'demo', routineId: 'demo', exerciseId: exercise.id, section: 'main', order: 1 }, exercise)}</p>
+      </div>
+      <div className="demo-section">
+        <h3>Safety</h3>
+        <ul>
+          {(exercise.safety ?? ['Stop if pain, numbness, dizziness, or sharp joint discomfort appears.']).map((item, itemIndex) => (
+            <li key={`${exercise.id}-safety-${itemIndex}`}>{item}</li>
+          ))}
+        </ul>
+      </div>
       <p className="demo-attribution">
-        {media?.attributionText ?? exercise.attribution ?? 'Original RampRep written instructions.'}
+        Media: self-authored RampRep SVG/CSS demo first. {media?.attributionText ?? exercise.attribution ?? 'Original RampRep written instructions.'}
         {media?.licenseName ? ` License: ${media.licenseName}.` : ''}
       </p>
     </section>
@@ -811,14 +992,16 @@ function App() {
     setPage('dashboard')
   }
 
-  const addDraftExercise = (exercise: Exercise) => {
-    const recentEntry = data ? mostRecentCompletedEntry(exercise.id, data.exerciseLogEntries, data.workoutLogs) : undefined
-    const personalDefault = data?.personalExerciseDefaults.find((item) => item.exerciseId === exercise.id)
+  const addDraftExercise = (exercise: Exercise, options: { startFreeLog?: boolean } = {}) => {
+    const equipmentKey = exerciseEquipmentKey(exercise)
+    const recentEntry = data ? mostRecentCompletedEntry(exercise.id, data.exerciseLogEntries, data.workoutLogs, equipmentKey) : undefined
+    const personalDefault = data
+      ? personalDefaultForExercise(data.personalExerciseDefaults, exercise.id, equipmentKey)
+      : undefined
     const remembered = resolveExerciseLogDefaults({ exercise, personalDefault, recentEntry, units: data?.settings.units })
-    setDraftEntries((current) => [
-      ...current,
-      {
+    const draftEntry: WorkoutDraftEntry = {
         exerciseId: exercise.id,
+        equipmentKey,
         exerciseName: exercise.name,
         sets: remembered.sets ?? 1,
         reps: remembered.reps ?? '8',
@@ -838,13 +1021,26 @@ function App() {
                 emptyTrailerPractice: false,
               }
             : undefined,
-      },
-    ])
+      }
+
+    if (options.startFreeLog) {
+      setLogMode('free')
+      setSelectedRoutineId('')
+      setDurationMinutes(settingsDraft?.durationPreference ?? 30)
+      setDraftEntries((current) => [...(logMode === 'free' ? current : []), draftEntry])
+      setPage('log')
+      return
+    }
+
+    setDraftEntries((current) => [...current, draftEntry])
   }
 
   const applyExerciseToDraftEntry = (index: number, exercise: Exercise) => {
-    const recentEntry = data ? mostRecentCompletedEntry(exercise.id, data.exerciseLogEntries, data.workoutLogs) : undefined
-    const personalDefault = data?.personalExerciseDefaults.find((item) => item.exerciseId === exercise.id)
+    const equipmentKey = exerciseEquipmentKey(exercise)
+    const recentEntry = data ? mostRecentCompletedEntry(exercise.id, data.exerciseLogEntries, data.workoutLogs, equipmentKey) : undefined
+    const personalDefault = data
+      ? personalDefaultForExercise(data.personalExerciseDefaults, exercise.id, equipmentKey)
+      : undefined
     const remembered = resolveExerciseLogDefaults({ exercise, personalDefault, recentEntry, units: data?.settings.units })
 
     setDraftEntries((current) =>
@@ -853,6 +1049,7 @@ function App() {
           ? {
               ...item,
               exerciseId: exercise.id,
+              equipmentKey,
               exerciseName: exercise.name,
               sets: remembered.sets ?? exercise.defaults.sets,
               reps: remembered.reps ?? exercise.defaults.reps,
@@ -909,7 +1106,7 @@ function App() {
       targetAreas: ['custom'],
       equipment: ['bodyweight'],
       difficulty: 'beginner',
-      group: 'Recovery and Prehab',
+      group: 'Recovery',
       bikeTourPurpose: ['recovery'],
       defaults: { sets: 1, reps: '8', effort: 5 },
       attribution: 'User-created exercise.',
@@ -1237,7 +1434,7 @@ function App() {
   const roadmapGuidance = [
     `${data.schedule.weeklyFrequency} planned sessions/week across ${data.schedule.preferredDays.map(dayName).join(', ') || 'flex days'}.`,
     data.schedule.travelMode
-      ? 'Travel mode: choose bodyweight core, mobility prep, walks, and short recovery sessions.'
+      ? 'Travel mode: choose bodyweight core stability, mobility, walks, and short recovery sessions.'
       : ownedEquipmentKinds.has('bike')
       ? 'Bike available: keep one easy endurance or hill-support ride in the week.'
       : 'No bike marked owned yet: use walks, carries, hips, and core until rides are available.',
@@ -1456,27 +1653,40 @@ function App() {
                         <span />
                       </label>
                     </div>
-                    <div className="toolbar">
-                      <button className="icon-button" type="button" aria-label="Move routine up" onClick={() => void moveRoutine(routine, -1)}>
-                        <ChevronUp aria-hidden="true" size={18} />
-                      </button>
-                      <button className="icon-button" type="button" aria-label="Move routine down" onClick={() => void moveRoutine(routine, 1)}>
-                        <ChevronDown aria-hidden="true" size={18} />
-                      </button>
-                      <button
-                        className="icon-button"
-                        type="button"
-                        aria-label="Duplicate routine"
-                        onClick={async () => {
-                          await duplicateRoutine(routine.id)
-                          await refresh()
-                        }}
-                      >
-                        <Copy aria-hidden="true" size={18} />
-                      </button>
-                      <button className="ghost-button" type="button" onClick={() => startRoutine(routine.id)}>
+                    <div className="card-actions compact">
+                      <button className="primary-button compact-cta" type="button" onClick={() => startRoutine(routine.id)}>
                         Log
                       </button>
+                      <ActionMenu label={`${routine.name} actions`}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedRoutineId(routine.id)
+                            setRoutineDraft({ ...routine })
+                          }}
+                        >
+                          <Pencil aria-hidden="true" size={16} />
+                          Edit routine
+                        </button>
+                        <button type="button" onClick={() => void moveRoutine(routine, -1)}>
+                          <ChevronUp aria-hidden="true" size={16} />
+                          Move up
+                        </button>
+                        <button type="button" onClick={() => void moveRoutine(routine, 1)}>
+                          <ChevronDown aria-hidden="true" size={16} />
+                          Move down
+                        </button>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await duplicateRoutine(routine.id)
+                            await refresh()
+                          }}
+                        >
+                          <Copy aria-hidden="true" size={16} />
+                          Duplicate
+                        </button>
+                      </ActionMenu>
                     </div>
                     <div className="skip-row">
                       <select
@@ -1590,24 +1800,27 @@ function App() {
                               onChange={(value) => void saveRoutineExercise({ ...entry, durationSeconds: value }).then(refresh)}
                             />
                           </div>
-                          <div className="toolbar">
-                            <button className="icon-button" type="button" aria-label="Move exercise up" onClick={() => void moveRoutineExercise(entry, -1)}>
-                              <ChevronUp aria-hidden="true" size={18} />
-                            </button>
-                            <button className="icon-button" type="button" aria-label="Move exercise down" onClick={() => void moveRoutineExercise(entry, 1)}>
-                              <ChevronDown aria-hidden="true" size={18} />
-                            </button>
-                            <button
-                              className="icon-button danger"
-                              type="button"
-                              aria-label="Remove exercise"
-                              onClick={async () => {
-                                await deleteRoutineExercise(entry.id)
-                                await refresh()
-                              }}
-                            >
-                              <Trash2 aria-hidden="true" size={18} />
-                            </button>
+                          <div className="row-menu-line">
+                            <ActionMenu label={`${exercise?.name ?? 'Exercise'} row actions`}>
+                              <button type="button" onClick={() => void moveRoutineExercise(entry, -1)}>
+                                <ChevronUp aria-hidden="true" size={16} />
+                                Move up
+                              </button>
+                              <button type="button" onClick={() => void moveRoutineExercise(entry, 1)}>
+                                <ChevronDown aria-hidden="true" size={16} />
+                                Move down
+                              </button>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  await deleteRoutineExercise(entry.id)
+                                  await refresh()
+                                }}
+                              >
+                                <Trash2 aria-hidden="true" size={16} />
+                                Remove
+                              </button>
+                            </ActionMenu>
                           </div>
                         </div>
                       )
@@ -1690,25 +1903,37 @@ function App() {
               <section className="library-grid">
                 {filteredExercises.map((exercise) => (
                   <Card key={exercise.id} className="exercise-card">
-                    <ExerciseMotion exercise={exercise} />
-                    <div>
-                      <p className="eyebrow">{getExerciseCategory(exercise)}</p>
-                      <h2>{exercise.name}</h2>
-                      <p>{exercise.description}</p>
-                      <div className="tag-row">
-                        {[...(exercise.bikeTourPurpose ?? []), ...exercise.targetAreas].slice(0, 4).map((target, tagIndex) => (
-                          <span className="tag" key={`${exercise.id}-${target}-${tagIndex}`}>
-                            {target}
-                          </span>
-                        ))}
+                    <button className="exercise-card-main" type="button" onClick={() => setDemoExerciseId(exercise.id)}>
+                      <ExerciseMotion exercise={exercise} />
+                      <div>
+                        <p className="eyebrow">{getExerciseCategory(exercise)}</p>
+                        <h2>{exercise.name}</h2>
+                        <p>{exercise.description}</p>
+                        <div className="tag-row">
+                          {[...(exercise.bikeTourPurpose ?? []), ...exercise.targetAreas].slice(0, 4).map((target, tagIndex) => (
+                            <span className="tag" key={`${exercise.id}-${target}-${tagIndex}`}>
+                              {target}
+                            </span>
+                          ))}
+                        </div>
+                        <small>{data.exerciseMedia.find((media) => media.exerciseId === exercise.id)?.attributionText ?? exercise.attribution}</small>
                       </div>
-                      <small>{data.exerciseMedia.find((media) => media.exerciseId === exercise.id)?.attributionText ?? exercise.attribution}</small>
-                    </div>
-                    <div className="card-actions">
-                      <ExerciseDemoButton exercise={exercise} onOpen={setDemoExerciseId} />
-                      <button className="icon-button tertiary" type="button" aria-label={`Edit ${exercise.name}`} onClick={() => setExerciseDraft({ ...exercise })}>
-                        <Pencil aria-hidden="true" size={17} />
+                    </button>
+                    <div className="card-actions compact">
+                      <button className="primary-button compact-cta" type="button" onClick={() => addDraftExercise(exercise, { startFreeLog: true })}>
+                        <Plus aria-hidden="true" size={17} />
+                        Add to Log
                       </button>
+                      <ActionMenu label={`${exercise.name} actions`}>
+                        <button type="button" onClick={() => setDemoExerciseId(exercise.id)}>
+                          <CircleHelp aria-hidden="true" size={16} />
+                          How to
+                        </button>
+                        <button type="button" onClick={() => setExerciseDraft({ ...exercise })}>
+                          <Pencil aria-hidden="true" size={16} />
+                          Edit exercise
+                        </button>
+                      </ActionMenu>
                     </div>
                   </Card>
                 ))}
@@ -2039,6 +2264,27 @@ function App() {
                     <button
                       className="ghost-button"
                       type="button"
+                      onClick={() =>
+                        setDraftEntries((current) => {
+                          const source = (current.length ? current : visibleDraftEntries)[index]
+                          if (!source) {
+                            return current
+                          }
+                          const nextEntry: WorkoutDraftEntry = {
+                            ...source,
+                            routineExerciseId: undefined,
+                            notes: source.notes ? `${source.notes} (repeat)` : 'repeat set',
+                          }
+                          const base = current.length ? current : visibleDraftEntries
+                          return [...base.slice(0, index + 1), nextEntry, ...base.slice(index + 1)]
+                        })
+                      }
+                    >
+                      Repeat last set
+                    </button>
+                    <button
+                      className="ghost-button"
+                      type="button"
                       disabled={index === 0}
                       onClick={() =>
                         setDraftEntries((current) =>
@@ -2064,6 +2310,28 @@ function App() {
                       type="button"
                       onClick={() =>
                         setDraftEntries((current) =>
+                          (current.length ? current : visibleDraftEntries).map((item, itemIndex) =>
+                            itemIndex > index
+                              ? {
+                                  ...item,
+                                  sets: entry.sets,
+                                  reps: entry.reps,
+                                  weight: entry.weight,
+                                  durationSeconds: entry.durationSeconds,
+                                  effort: entry.effort,
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                    >
+                      Apply to remaining
+                    </button>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() =>
+                        setDraftEntries((current) =>
                           current.map((item) => ({
                             ...item,
                             sets: entry.sets,
@@ -2082,11 +2350,28 @@ function App() {
                       <p className="notice">Dog comfort is mandatory. Avoid heat, traffic, excessive speed, and hard hill repeats with the dog.</p>
                       <div className="log-grid thumb-grid">
                         <WeightPicker
+                          label="Dog weight"
                           units={data.settings.units}
                           value={Number(entry.customFields?.dogWeight ?? 45)}
-                          onChange={(value) => setDraftEntries((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, customFields: { ...item.customFields, dogWeight: value ?? 45 } } : item)))}
+                          onChange={(value) =>
+                            setDraftEntries((current) =>
+                              current.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      customFields: {
+                                        ...item.customFields,
+                                        dogWeight: value ?? 45,
+                                        totalTowedLoad: (value ?? 45) + Number(item.customFields?.trailerLoadWeight ?? 0),
+                                      },
+                                    }
+                                  : item,
+                              ),
+                            )
+                          }
                         />
                         <WeightPicker
+                          label="Trailer load"
                           units={data.settings.units}
                           value={Number(entry.customFields?.trailerLoadWeight ?? 0)}
                           onChange={(value) => setDraftEntries((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, customFields: { ...item.customFields, trailerLoadWeight: value ?? 0, totalTowedLoad: Number(item.customFields?.dogWeight ?? 45) + (value ?? 0) } } : item)))}

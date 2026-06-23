@@ -40,9 +40,15 @@ interface ExerciseSeed {
   id: string
   name: string
   description: string
+  purpose?: string
+  setup?: string
   instructions: string[]
   formCues: string[]
   commonMistakes: string[]
+  regressions?: string[]
+  progressions?: string[]
+  dose?: string
+  safety?: string[]
   targetAreas: string[]
   equipment: EquipmentKind[]
   difficulty: Exercise['difficulty']
@@ -91,7 +97,7 @@ const quickExerciseGuidance = (
     }
   }
 
-  if (group === 'Bike and Outdoor Conditioning') {
+  if (group === 'Ride Sessions') {
     return {
       instructions: [
         'Warm up easily before adding distance, grade, or effort.',
@@ -103,7 +109,7 @@ const quickExerciseGuidance = (
     }
   }
 
-  if (group === 'Mobility and Yoga') {
+  if (group === 'Mobility & Yoga') {
     return {
       instructions: [
         'Move into a comfortable stretch or mobility position without forcing end range.',
@@ -115,7 +121,7 @@ const quickExerciseGuidance = (
     }
   }
 
-  if (group === 'Core') {
+  if (group === 'Core Stability') {
     return {
       instructions: [
         'Set ribs down, pelvis neutral, and brace as if preparing for a gentle cough.',
@@ -127,7 +133,7 @@ const quickExerciseGuidance = (
     }
   }
 
-  if (group === 'Back and Posture') {
+  if (group === 'Upper Back & Posture') {
     const banded = equipment.includes('band')
     return {
       instructions: banded
@@ -146,7 +152,7 @@ const quickExerciseGuidance = (
     }
   }
 
-  if (group === 'Legs and Hill Climbing') {
+  if (group === 'Single-Leg Strength') {
     return {
       instructions: [
         'Set the working foot firmly and find balance before starting the rep.',
@@ -158,7 +164,7 @@ const quickExerciseGuidance = (
     }
   }
 
-  if (group === 'Hinge and Posterior Chain') {
+  if (group === 'Hinge & Posterior Chain') {
     return {
       instructions: [
         'Brace, soften the knees, and send hips back as if closing a car door.',
@@ -170,7 +176,7 @@ const quickExerciseGuidance = (
     }
   }
 
-  if (group === 'Carries and Loaded Conditioning') {
+  if (group === 'Carry & Load Transfer') {
     return {
       instructions: [
         'Pick up the load with a hinge and stand tall before walking.',
@@ -193,6 +199,74 @@ const quickExerciseGuidance = (
   }
 }
 
+const inferExerciseGroup = (seed: ExerciseSeed): ExerciseGroup => {
+  const text = [seed.id, seed.name, seed.description, seed.targetAreas.join(' '), seed.equipment.join(' '), seed.bikeTourPurpose?.join(' ') ?? '']
+    .join(' ')
+    .toLowerCase()
+
+  if (/burley|trailer|tow/.test(text)) {
+    return 'Burley & Trailer Work'
+  }
+  if (/ride|bike|cycling|gravel|cadence|spin|tour/.test(text)) {
+    return 'Ride Sessions'
+  }
+  if (/balance|tibialis|reach/.test(text)) {
+    return 'Balance & Control'
+  }
+  if (/stretch|mobility|yoga|cat-cow|open book|sphinx|cobra|downward|hip|ankle/.test(text)) {
+    return 'Mobility & Yoga'
+  }
+  if (/row|pull|posture|scapular|shoulder|face pull/.test(text)) {
+    return 'Upper Back & Posture'
+  }
+  if (/carry|load/.test(text)) {
+    return 'Carry & Load Transfer'
+  }
+  if (/split squat|lunge|step-up|single-leg|calf|soleus|wall sit|squat/.test(text)) {
+    return 'Single-Leg Strength'
+  }
+  if (/hinge|deadlift|posterior|hamstring|glute|bridge|swing/.test(text)) {
+    return 'Hinge & Posterior Chain'
+  }
+  if (/recovery|prehab/.test(text)) {
+    return 'Recovery'
+  }
+
+  return 'Core Stability'
+}
+
+const doseText = (defaults: ExerciseDefaults) => {
+  const pieces = [
+    defaults.sets ? `${defaults.sets} sets` : '',
+    defaults.reps ?? '',
+    defaults.durationSeconds ? `${Math.round(defaults.durationSeconds / 60) || defaults.durationSeconds}${defaults.durationSeconds >= 60 ? ' min' : ' sec'}` : '',
+    defaults.distance ?? '',
+  ].filter(Boolean)
+
+  return pieces.length ? pieces.join(' / ') : 'Use a short, crisp set and stop before form fades.'
+}
+
+const structuredGuidance = (seed: ExerciseSeed, group: ExerciseGroup) => ({
+  purpose: seed.purpose ?? seed.description,
+  setup: seed.setup ?? seed.instructions[0] ?? 'Choose a stable start position and a range you can control.',
+  regressions:
+    seed.regressions ??
+    (group === 'Ride Sessions' || group === 'Burley & Trailer Work'
+      ? ['Shorten the route, flatten the terrain, or reduce load until handling stays calm.']
+      : ['Reduce range, load, or time until each rep is clean.']),
+  progressions:
+    seed.progressions ??
+    (group === 'Ride Sessions' || group === 'Burley & Trailer Work'
+      ? ['Add distance, gentle grade, or load only after the previous version feels repeatable.']
+      : ['Add a small amount of load, time, or range after form is repeatable.']),
+  dose: seed.dose ?? doseText(seed.defaults),
+  safety:
+    seed.safety ??
+    (group === 'Burley & Trailer Work'
+      ? ['Stop for heat, traffic, handling issues, or any dog discomfort.', 'Use extra braking distance and avoid sharp turns.']
+      : ['Stop if pain, numbness, dizziness, or sharp joint discomfort appears.']),
+})
+
 const makeExercise = (seed: ExerciseSeed, index: number): Exercise => {
   const colors = [
     ['#214e5f', '#8bd3c7'],
@@ -203,9 +277,13 @@ const makeExercise = (seed: ExerciseSeed, index: number): Exercise => {
     ['#62572b', '#f0d56f'],
   ]
   const [color, accent] = colors[index % colors.length]
+  const group = seed.group ?? inferExerciseGroup(seed)
+  const guidance = structuredGuidance(seed, group)
 
   return {
     ...seed,
+    group,
+    ...guidance,
     imageUrl: seed.imageUrl ?? exerciseArt(seed.name, color, accent),
     attribution: seed.attribution ?? localAttribution,
     createdAt: seedTimestamp,
@@ -704,40 +782,44 @@ const quickExercise = (
 }
 
 const extraExerciseSeeds: ExerciseSeed[] = [
-  quickExercise('front-plank', 'front plank', 'Core', ['bodyweight', 'yoga mat'], ['core', 'shoulders'], { sets: 3, durationSeconds: 30 }, ['anti-extension'], 'Anti-extension core endurance for long seated climbs.'),
-  quickExercise('pallof-press', 'Pallof press', 'Core', ['band'], ['obliques', 'core'], { sets: 3, reps: '10 each side' }, ['anti-rotation'], 'Band anti-rotation work for loaded-bike stability.'),
-  quickExercise('mcgill-curl-up', 'McGill curl-up', 'Core', ['bodyweight', 'yoga mat'], ['core', 'back'], { sets: 2, reps: '6 each side' }, ['anti-extension'], 'Back-friendly core stiffness drill.'),
-  quickExercise('hollow-hold', 'hollow hold', 'Core', ['bodyweight', 'yoga mat'], ['core', 'hip flexors'], { sets: 3, durationSeconds: 20 }, ['anti-extension'], 'Progression from dead bugs for trunk endurance.'),
-  quickExercise('bear-crawl-hold', 'bear crawl hold', 'Core', ['bodyweight', 'yoga mat'], ['core', 'shoulders', 'hips'], { sets: 3, durationSeconds: 20 }, ['anti-rotation'], 'Quadruped core stiffness and shoulder support.'),
-  quickExercise('band-face-pull', 'band face pull', 'Back and Posture', ['band'], ['upper back', 'rear delts'], { sets: 3, reps: '15' }, ['upper back'], 'Upper-back and shoulder posture work for cycling position.'),
-  quickExercise('band-external-rotation', 'band external rotation', 'Back and Posture', ['band'], ['rotator cuff', 'shoulders'], { sets: 2, reps: '12 each side' }, ['upper back'], 'Light shoulder prehab for healthy pulling and posture.'),
-  quickExercise('prone-y-t-w', 'prone Y-T-W', 'Back and Posture', ['bodyweight', 'yoga mat'], ['upper back', 'shoulders'], { sets: 2, reps: '6 each shape' }, ['upper back'], 'Low-load scapular control series.'),
-  quickExercise('scapular-push-up', 'scapular push-up', 'Back and Posture', ['bodyweight'], ['serratus', 'shoulders'], { sets: 2, reps: '10' }, ['upper back'], 'Shoulder blade control for pressing and riding posture.'),
-  quickExercise('chest-supported-dumbbell-row', 'chest-supported dumbbell row', 'Back and Posture', ['dumbbell', 'chair'], ['upper back', 'lats'], { sets: 3, reps: '10' }, ['upper back'], 'Supported row option when a bench or sturdy chair is available.'),
-  quickExercise('reverse-lunge', 'reverse lunge', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell'], ['glutes', 'quads'], { sets: 3, reps: '8 each leg' }, ['hill climbing'], 'Single-leg strength for steep hill starts and climbs.'),
-  quickExercise('lateral-lunge', 'lateral lunge', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell'], ['adductors', 'glutes'], { sets: 2, reps: '8 each side' }, ['hill climbing'], 'Side-to-side hip strength for uneven gravel and handling.'),
-  quickExercise('calf-raise', 'calf raise', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell'], ['calves'], { sets: 3, reps: '12' }, ['hill climbing'], 'Calf capacity for standing efforts and long climbs.'),
-  quickExercise('soleus-raise', 'soleus raise', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell', 'chair'], ['soleus', 'calves'], { sets: 3, reps: '15' }, ['hill climbing'], 'Bent-knee calf work for climbing endurance.'),
-  quickExercise('wall-sit', 'wall sit', 'Legs and Hill Climbing', ['bodyweight'], ['quads', 'glutes'], { sets: 3, durationSeconds: 30 }, ['hill climbing'], 'Quad endurance for sustained grades.'),
-  quickExercise('single-leg-romanian-deadlift', 'single-leg Romanian deadlift', 'Hinge and Posterior Chain', ['bodyweight', 'dumbbell'], ['hamstrings', 'glutes', 'balance'], { sets: 3, reps: '8 each side' }, ['posterior chain'], 'Single-leg hinge control for hips and back durability.'),
-  quickExercise('box-squat-to-chair', 'box squat to chair', 'Legs and Hill Climbing', ['bodyweight', 'dumbbell', 'chair'], ['quads', 'glutes'], { sets: 3, reps: '8' }, ['hill climbing'], 'Squat strength with a consistent depth target.'),
-  quickExercise('couch-stretch', 'couch stretch', 'Mobility and Yoga', ['bodyweight', 'yoga mat'], ['hip flexors', 'quads'], { durationSeconds: 60 }, ['mobility'], 'Deep hip-flexor and quad opener after rides.'),
-  quickExercise('downward-dog', 'downward dog', 'Mobility and Yoga', ['bodyweight', 'yoga mat'], ['calves', 'hamstrings', 'shoulders'], { durationSeconds: 60 }, ['mobility'], 'Posterior chain and shoulder mobility reset.'),
-  quickExercise('90-90-hip-switch', '90/90 hip switch', 'Mobility and Yoga', ['bodyweight', 'yoga mat'], ['hips'], { sets: 2, reps: '8 each side' }, ['mobility'], 'Hip rotation mobility for saddle comfort.'),
-  quickExercise('ankle-rocks', 'ankle dorsiflexion rocks', 'Mobility and Yoga', ['bodyweight'], ['ankles', 'calves'], { sets: 2, reps: '10 each side' }, ['mobility'], 'Ankle mobility for squats, stairs, and hike-a-bike moments.'),
-  quickExercise('standing-calf-stretch', 'standing calf stretch', 'Mobility and Yoga', ['bodyweight'], ['calves'], { durationSeconds: 60 }, ['mobility', 'recovery'], 'Simple calf recovery after hills.'),
-  quickExercise('thoracic-extension-roller', 'thoracic extension over rolled towel', 'Mobility and Yoga', ['foam roller', 'yoga mat'], ['thoracic spine', 'chest'], { durationSeconds: 60 }, ['mobility'], 'Upper-back extension to counter riding posture.'),
-  quickExercise('easy-endurance-ride', 'easy endurance ride', 'Bike and Outdoor Conditioning', ['bike'], ['aerobic base'], { durationSeconds: 3600, distance: '10 mi', effort: 4 }, ['ride conditioning'], 'Comfortable endurance riding for aerobic base.'),
-  quickExercise('hill-repeat-ride', 'hill repeat ride', 'Bike and Outdoor Conditioning', ['bike'], ['quads', 'glutes', 'lungs'], { durationSeconds: 2700, effort: 8 }, ['hill climbing'], 'Short controlled hill repeats around Harrisonburg-style grades.'),
-  quickExercise('low-cadence-climb-intervals', 'low-cadence climb intervals', 'Bike and Outdoor Conditioning', ['bike'], ['glutes', 'quads', 'core'], { durationSeconds: 2400, effort: 7 }, ['hill climbing'], 'Low-cadence hill strength intervals without sprinting.'),
-  quickExercise('loaded-gravel-ride', 'loaded gravel ride', 'Bike and Outdoor Conditioning', ['bike'], ['aerobic base', 'trunk'], { durationSeconds: 5400, distance: '20 mi', effort: 6 }, ['loaded-bike durability'], 'Practice handling and pacing with bags or load.'),
-  quickExercise('recovery-spin', 'recovery spin', 'Recovery and Prehab', ['bike'], ['recovery'], { durationSeconds: 1800, effort: 2 }, ['recovery'], 'Easy spin to move blood without adding fatigue.'),
-  quickExercise('walk-hike', 'walk/hike', 'Bike and Outdoor Conditioning', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 2700, effort: 3 }, ['ride conditioning'], 'Low-stress outdoor conditioning for busy weeks.'),
-  quickExercise('burley-loaded-trailer-ride', 'Burley loaded trailer ride', 'Bike and Outdoor Conditioning', ['bike', 'trailer'], ['aerobic base', 'trunk', 'handling'], { durationSeconds: 2700, distance: '8 mi', effort: 5 }, ['trailer handling', 'loaded-bike durability'], 'Gentle trailer conditioning with dog comfort as the first constraint.'),
-  quickExercise('trailer-walk', 'trailer walk', 'Bike and Outdoor Conditioning', ['trailer', 'bodyweight'], ['handling', 'aerobic base'], { durationSeconds: 1200, effort: 3 }, ['trailer handling', 'recovery'], 'Low-speed trailer handling practice on foot before dog-loaded riding.'),
-  quickExercise('loaded-carry-for-trailer-days', 'loaded carry for trailer days', 'Carries and Loaded Conditioning', ['carry', 'dumbbell', 'kettlebell'], ['trunk', 'grip', 'load tolerance'], { sets: 4, durationSeconds: 45, effort: 6 }, ['loaded-bike durability'], 'Carry work that builds trunk stiffness for loaded bike and trailer handling.'),
-  quickExercise('controlled-trailer-towing-workout', 'controlled trailer towing workout', 'Bike and Outdoor Conditioning', ['bike', 'trailer'], ['handling', 'aerobic base', 'trunk'], { durationSeconds: 2400, distance: '5 mi', effort: 4 }, ['trailer handling', 'loaded-bike durability'], 'Short controlled towing session with stops, turns, braking practice, and comfort checks.'),
-  quickExercise('easy-tour-specificity-session', 'easy tour specificity session', 'Bike and Outdoor Conditioning', ['bike'], ['aerobic base', 'pacing'], { durationSeconds: 3600, distance: '12 mi', effort: 4 }, ['ride conditioning', 'loaded-bike durability'], 'Easy touring-specific session for pacing, gear checks, nutrition notes, and steady effort.'),
+  quickExercise('front-plank', 'front plank', 'Core Stability', ['bodyweight', 'yoga mat'], ['core', 'shoulders'], { sets: 3, durationSeconds: 30 }, ['anti-extension'], 'Anti-extension core endurance for long seated climbs.'),
+  quickExercise('pallof-press', 'Pallof press', 'Core Stability', ['band'], ['obliques', 'core'], { sets: 3, reps: '10 each side' }, ['anti-rotation'], 'Band anti-rotation work for loaded-bike stability.'),
+  quickExercise('mcgill-curl-up', 'McGill curl-up', 'Core Stability', ['bodyweight', 'yoga mat'], ['core', 'back'], { sets: 2, reps: '6 each side' }, ['anti-extension'], 'Back-friendly core stiffness drill.'),
+  quickExercise('hollow-hold', 'hollow hold', 'Core Stability', ['bodyweight', 'yoga mat'], ['core', 'hip flexors'], { sets: 3, durationSeconds: 20 }, ['anti-extension'], 'Progression from dead bugs for trunk endurance.'),
+  quickExercise('bear-crawl-hold', 'bear crawl hold', 'Core Stability', ['bodyweight', 'yoga mat'], ['core', 'shoulders', 'hips'], { sets: 3, durationSeconds: 20 }, ['anti-rotation'], 'Quadruped core stiffness and shoulder support.'),
+  quickExercise('band-face-pull', 'band face pull', 'Upper Back & Posture', ['band'], ['upper back', 'rear delts'], { sets: 3, reps: '15' }, ['upper back'], 'Upper-back and shoulder posture work for cycling position.'),
+  quickExercise('band-external-rotation', 'band external rotation', 'Upper Back & Posture', ['band'], ['rotator cuff', 'shoulders'], { sets: 2, reps: '12 each side' }, ['upper back'], 'Light shoulder prehab for healthy pulling and posture.'),
+  quickExercise('prone-y-t-w', 'prone Y-T-W', 'Upper Back & Posture', ['bodyweight', 'yoga mat'], ['upper back', 'shoulders'], { sets: 2, reps: '6 each shape' }, ['upper back'], 'Low-load scapular control series.'),
+  quickExercise('scapular-push-up', 'scapular push-up', 'Upper Back & Posture', ['bodyweight'], ['serratus', 'shoulders'], { sets: 2, reps: '10' }, ['upper back'], 'Shoulder blade control for pressing and riding posture.'),
+  quickExercise('chest-supported-dumbbell-row', 'chest-supported dumbbell row', 'Upper Back & Posture', ['dumbbell', 'chair'], ['upper back', 'lats'], { sets: 3, reps: '10' }, ['upper back'], 'Supported row option when a bench or sturdy chair is available.'),
+  quickExercise('reverse-lunge', 'reverse lunge', 'Single-Leg Strength', ['bodyweight', 'dumbbell'], ['glutes', 'quads'], { sets: 3, reps: '8 each leg' }, ['hill climbing'], 'Single-leg strength for steep hill starts and climbs.'),
+  quickExercise('lateral-lunge', 'lateral lunge', 'Single-Leg Strength', ['bodyweight', 'dumbbell'], ['adductors', 'glutes'], { sets: 2, reps: '8 each side' }, ['hill climbing'], 'Side-to-side hip strength for uneven gravel and handling.'),
+  quickExercise('calf-raise', 'calf raise', 'Single-Leg Strength', ['bodyweight', 'dumbbell'], ['calves'], { sets: 3, reps: '12' }, ['hill climbing'], 'Calf capacity for standing efforts and long climbs.'),
+  quickExercise('soleus-raise', 'soleus raise', 'Single-Leg Strength', ['bodyweight', 'dumbbell', 'chair'], ['soleus', 'calves'], { sets: 3, reps: '15' }, ['hill climbing'], 'Bent-knee calf work for climbing endurance.'),
+  quickExercise('tibialis-raise', 'tibialis raise', 'Balance & Control', ['bodyweight'], ['tibialis anterior', 'ankles'], { sets: 2, reps: '15' }, ['hill climbing'], 'Front-shin strength for descents, hike-a-bike control, and ankle balance.'),
+  quickExercise('wall-sit', 'wall sit', 'Single-Leg Strength', ['bodyweight'], ['quads', 'glutes'], { sets: 3, durationSeconds: 30 }, ['hill climbing'], 'Quad endurance for sustained grades.'),
+  quickExercise('single-leg-romanian-deadlift', 'single-leg Romanian deadlift', 'Hinge & Posterior Chain', ['bodyweight', 'dumbbell'], ['hamstrings', 'glutes', 'balance'], { sets: 3, reps: '8 each side' }, ['posterior chain'], 'Single-leg hinge control for hips and back durability.'),
+  quickExercise('single-leg-balance-reach', 'single-leg balance reach', 'Balance & Control', ['bodyweight'], ['balance', 'feet', 'hips'], { sets: 2, reps: '6 each side' }, ['lateral stability'], 'Quiet single-leg reaching drill for trail stops, clip-ins, and uneven ground.'),
+  quickExercise('heel-to-toe-walk', 'heel-to-toe walk', 'Balance & Control', ['bodyweight'], ['balance', 'feet', 'ankles'], { sets: 2, distance: '20 ft' }, ['lateral stability'], 'Narrow-stance walking balance for loaded-bike handling and dismounts.'),
+  quickExercise('box-squat-to-chair', 'box squat to chair', 'Single-Leg Strength', ['bodyweight', 'dumbbell', 'chair'], ['quads', 'glutes'], { sets: 3, reps: '8' }, ['hill climbing'], 'Squat strength with a consistent depth target.'),
+  quickExercise('couch-stretch', 'couch stretch', 'Mobility & Yoga', ['bodyweight', 'yoga mat'], ['hip flexors', 'quads'], { durationSeconds: 60 }, ['mobility'], 'Deep hip-flexor and quad opener after rides.'),
+  quickExercise('downward-dog', 'downward dog', 'Mobility & Yoga', ['bodyweight', 'yoga mat'], ['calves', 'hamstrings', 'shoulders'], { durationSeconds: 60 }, ['mobility'], 'Posterior chain and shoulder mobility reset.'),
+  quickExercise('90-90-hip-switch', '90/90 hip switch', 'Mobility & Yoga', ['bodyweight', 'yoga mat'], ['hips'], { sets: 2, reps: '8 each side' }, ['mobility'], 'Hip rotation mobility for saddle comfort.'),
+  quickExercise('ankle-rocks', 'ankle dorsiflexion rocks', 'Mobility & Yoga', ['bodyweight'], ['ankles', 'calves'], { sets: 2, reps: '10 each side' }, ['mobility'], 'Ankle mobility for squats, stairs, and hike-a-bike moments.'),
+  quickExercise('standing-calf-stretch', 'standing calf stretch', 'Mobility & Yoga', ['bodyweight'], ['calves'], { durationSeconds: 60 }, ['mobility', 'recovery'], 'Simple calf recovery after hills.'),
+  quickExercise('thoracic-extension-roller', 'thoracic extension over rolled towel', 'Mobility & Yoga', ['foam roller', 'yoga mat'], ['thoracic spine', 'chest'], { durationSeconds: 60 }, ['mobility'], 'Upper-back extension to counter riding posture.'),
+  quickExercise('easy-endurance-ride', 'easy endurance ride', 'Ride Sessions', ['bike'], ['aerobic base'], { durationSeconds: 3600, distance: '10 mi', effort: 4 }, ['ride conditioning'], 'Comfortable endurance riding for aerobic base.'),
+  quickExercise('hill-repeat-ride', 'hill repeat ride', 'Ride Sessions', ['bike'], ['quads', 'glutes', 'lungs'], { durationSeconds: 2700, effort: 8 }, ['hill climbing'], 'Short controlled hill repeats around Harrisonburg-style grades.'),
+  quickExercise('low-cadence-climb-intervals', 'low-cadence climb intervals', 'Ride Sessions', ['bike'], ['glutes', 'quads', 'core'], { durationSeconds: 2400, effort: 7 }, ['hill climbing'], 'Low-cadence hill strength intervals without sprinting.'),
+  quickExercise('loaded-gravel-ride', 'loaded gravel ride', 'Ride Sessions', ['bike'], ['aerobic base', 'trunk'], { durationSeconds: 5400, distance: '20 mi', effort: 6 }, ['loaded-bike durability'], 'Practice handling and pacing with bags or load.'),
+  quickExercise('recovery-spin', 'recovery spin', 'Recovery', ['bike'], ['recovery'], { durationSeconds: 1800, effort: 2 }, ['recovery'], 'Easy spin to move blood without adding fatigue.'),
+  quickExercise('walk-hike', 'walk/hike', 'Recovery', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 2700, effort: 3 }, ['ride conditioning'], 'Low-stress outdoor conditioning for busy weeks.'),
+  quickExercise('burley-loaded-trailer-ride', 'Burley loaded trailer ride', 'Burley & Trailer Work', ['bike', 'trailer'], ['aerobic base', 'trunk', 'handling'], { durationSeconds: 2700, distance: '8 mi', effort: 5 }, ['trailer handling', 'loaded-bike durability'], 'Gentle trailer conditioning with dog comfort as the first constraint.'),
+  quickExercise('trailer-walk', 'trailer walk', 'Burley & Trailer Work', ['trailer', 'bodyweight'], ['handling', 'aerobic base'], { durationSeconds: 1200, effort: 3 }, ['trailer handling', 'recovery'], 'Low-speed trailer handling practice on foot before dog-loaded riding.'),
+  quickExercise('trailer-hill-starts', 'trailer hill starts', 'Burley & Trailer Work', ['bike', 'trailer'], ['handling', 'braking', 'hill starts'], { durationSeconds: 1500, distance: '3 mi', effort: 5 }, ['trailer handling', 'hill climbing'], 'Controlled trailer hill starts and stops on a gentle grade before loaded climbs.'),
+  quickExercise('loaded-carry-for-trailer-days', 'loaded carry for trailer days', 'Carry & Load Transfer', ['carry', 'dumbbell', 'kettlebell'], ['trunk', 'grip', 'load tolerance'], { sets: 4, durationSeconds: 45, effort: 6 }, ['loaded-bike durability'], 'Carry work that builds trunk stiffness for loaded bike and trailer handling.'),
+  quickExercise('controlled-trailer-towing-workout', 'controlled trailer towing workout', 'Burley & Trailer Work', ['bike', 'trailer'], ['handling', 'aerobic base', 'trunk'], { durationSeconds: 2400, distance: '5 mi', effort: 4 }, ['trailer handling', 'loaded-bike durability'], 'Short controlled towing session with stops, turns, braking practice, and comfort checks.'),
+  quickExercise('easy-tour-specificity-session', 'easy tour specificity session', 'Ride Sessions', ['bike'], ['aerobic base', 'pacing'], { durationSeconds: 3600, distance: '12 mi', effort: 4 }, ['ride conditioning', 'loaded-bike durability'], 'Easy touring-specific session for pacing, gear checks, nutrition notes, and steady effort.'),
 ]
 
 export const seedExercises = [...exerciseSeeds, ...extraExerciseSeeds].map(makeExercise)

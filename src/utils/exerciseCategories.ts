@@ -1,15 +1,16 @@
 import type { Exercise } from '../types'
 
 export const functionalCategories = [
-  'mobility prep',
-  'core / anti-rotation',
-  'hinge / posterior chain',
-  'single-leg leg strength',
-  'upper-back / posture / pulling',
-  'carries / conditioning',
-  'cycling-specific',
-  'Burley / loaded trailer',
-  'recovery',
+  'Mobility & Yoga',
+  'Core Stability',
+  'Upper Back & Posture',
+  'Hinge & Posterior Chain',
+  'Single-Leg Strength',
+  'Carry & Load Transfer',
+  'Balance & Control',
+  'Recovery',
+  'Burley & Trailer Work',
+  'Ride Sessions',
 ] as const
 
 export type FunctionalCategory = (typeof functionalCategories)[number]
@@ -25,33 +26,39 @@ export const getExerciseCategory = (exercise: Pick<Exercise, 'name' | 'group' | 
     .join(' ')
     .toLowerCase()
 
+  if (exercise.group && functionalCategories.includes(exercise.group as FunctionalCategory)) {
+    return exercise.group as FunctionalCategory
+  }
   if (/burley|trailer|towed|tow|dog carrier/.test(text)) {
-    return 'Burley / loaded trailer'
+    return 'Burley & Trailer Work'
   }
   if (/ride|bike|cycling|climb|hill|gravel|endurance|spin/.test(text)) {
-    return 'cycling-specific'
+    return 'Ride Sessions'
   }
   if (/anti-rotation|anti-extension|pallof|dead bug|bird dog|plank|mcgill|hollow|bear crawl/.test(text)) {
-    return 'core / anti-rotation'
+    return 'Core Stability'
   }
   if (/recovery|gentle|soreness|prehab/.test(text)) {
-    return 'recovery'
+    return 'Recovery'
   }
   if (/mobility|stretch|ankle|hip flexor|90\/90|thoracic|yoga|cat-cow|open book|sphinx|cobra|downward/.test(text)) {
-    return 'mobility prep'
+    return 'Mobility & Yoga'
   }
-  if (/carry|conditioning|walk|hike|swing/.test(text)) {
-    return 'carries / conditioning'
+  if (/balance|tibialis|single-leg balance|reach/.test(text)) {
+    return 'Balance & Control'
+  }
+  if (/carry|loaded|load transfer|conditioning|walk|hike|swing/.test(text)) {
+    return 'Carry & Load Transfer'
   }
   if (/row|pull|upper back|posture|scapular|face pull|pull-apart|rotation|shoulder/.test(text)) {
-    return 'upper-back / posture / pulling'
+    return 'Upper Back & Posture'
   }
   if (/split squat|lunge|step-up|single-leg|wall sit|calf|soleus/.test(text)) {
-    return 'single-leg leg strength'
+    return 'Single-Leg Strength'
   }
   if (/hinge|deadlift|posterior|glute|hamstring|bridge|hip thrust/.test(text)) {
-    return 'hinge / posterior chain'
+    return 'Hinge & Posterior Chain'
   }
 
-  return 'core / anti-rotation'
+  return 'Core Stability'
 }

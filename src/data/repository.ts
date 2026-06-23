@@ -30,7 +30,7 @@ import type {
 } from '../types'
 import { defaultCarbSettings, normalizeCarbGrams } from '../utils/carbs'
 import { toDateKey } from '../utils/date'
-import { mostRecentCompletedEntry, resolveExerciseLogDefaults } from '../utils/defaults'
+import { defaultKeyForExercise, mostRecentCompletedEntry, resolveExerciseLogDefaults } from '../utils/defaults'
 
 const nowIso = () => new Date().toISOString()
 
@@ -139,25 +139,44 @@ export const ensureV11Seeds = async () => {
         await db.exercises.bulkPut(missingExercises)
       }
       const seededExerciseById = new Map(seedExercises.map((item) => [item.id, item]))
-      const instructionUpdates = existingExercises
-        .map((exercise) => {
-          const seededExercise = seededExerciseById.get(exercise.id)
-          const hasOldGenericInstruction = exercise.instructions.some((step) =>
-            step.toLowerCase().startsWith(`set up for ${exercise.name.toLowerCase()}`),
-          )
+      const instructionUpdates: Exercise[] = []
 
-          return seededExercise && hasOldGenericInstruction
-            ? {
-                ...exercise,
-                description: seededExercise.description,
-                instructions: seededExercise.instructions,
-                formCues: seededExercise.formCues,
-                commonMistakes: seededExercise.commonMistakes,
-                updatedAt: nowIso(),
-              }
-            : null
-        })
-        .filter((exercise): exercise is Exercise => Boolean(exercise))
+      existingExercises.forEach((exercise) => {
+        const seededExercise = seededExerciseById.get(exercise.id)
+        if (!seededExercise) {
+          return
+        }
+
+        const hasOldGenericInstruction = exercise.instructions.some((step) =>
+          step.toLowerCase().startsWith(`set up for ${exercise.name.toLowerCase()}`),
+        )
+        const hasOldTaxonomyOrGuidance =
+          exercise.group !== seededExercise.group ||
+          !exercise.purpose ||
+          !exercise.setup ||
+          !exercise.regressions?.length ||
+          !exercise.progressions?.length ||
+          !exercise.dose ||
+          !exercise.safety?.length
+
+        if (hasOldGenericInstruction || hasOldTaxonomyOrGuidance) {
+          instructionUpdates.push({
+            ...exercise,
+            group: seededExercise.group,
+            description: seededExercise.description,
+            purpose: seededExercise.purpose,
+            setup: seededExercise.setup,
+            instructions: seededExercise.instructions,
+            formCues: seededExercise.formCues,
+            commonMistakes: seededExercise.commonMistakes,
+            regressions: seededExercise.regressions,
+            progressions: seededExercise.progressions,
+            dose: seededExercise.dose,
+            safety: seededExercise.safety,
+            updatedAt: nowIso(),
+          })
+        }
+      })
 
       if (instructionUpdates.length) {
         await db.exercises.bulkPut(instructionUpdates)
@@ -492,9 +511,12 @@ export const saveEquipment = async (equipment: Equipment) => {
 }
 
 export const updateExerciseDefaultsFromLog = async (entry: ExerciseLogEntry) => {
+  const equipmentKey = entry.equipmentKey ?? 'bodyweight'
+
   await db.personalExerciseDefaults.put({
-    id: `default-${entry.exerciseId}`,
+    id: defaultKeyForExercise(entry.exerciseId, equipmentKey),
     exerciseId: entry.exerciseId,
+    equipmentKey,
     sets: entry.sets,
     reps: entry.reps,
     weight: entry.weight,
@@ -511,14 +533,16 @@ export const getExerciseLogDefaults = async (
   routineExercise?: RoutineExercise,
   exercise?: Exercise,
   units = 'lb',
+  equipmentKey = 'bodyweight',
 ) => {
   const [personalDefault, logs, entries] = await Promise.all([
-    db.personalExerciseDefaults.get(`default-${exerciseId}`),
+    db.personalExerciseDefaults.get(defaultKeyForExercise(exerciseId, equipmentKey)),
     db.workoutLogs.orderBy('completedAt').reverse().toArray(),
     db.exerciseLogEntries.where('exerciseId').equals(exerciseId).toArray(),
   ])
-  const recentEntry = mostRecentCompletedEntry(exerciseId, entries, logs)
-  return resolveExerciseLogDefaults({ exercise, routineExercise, personalDefault, recentEntry, units })
+  const fallbackDefault = personalDefault ?? (await db.personalExerciseDefaults.get(`default-${exerciseId}`))
+  const recentEntry = mostRecentCompletedEntry(exerciseId, entries, logs, equipmentKey)
+  return resolveExerciseLogDefaults({ exercise, routineExercise, personalDefault: fallbackDefault, recentEntry, units })
 }
 
 export const createWorkoutLog = async (

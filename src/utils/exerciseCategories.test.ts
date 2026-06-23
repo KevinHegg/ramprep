@@ -22,19 +22,19 @@ const exercise = (overrides: Partial<Exercise>): Exercise =>
 describe('getExerciseCategory', () => {
   it('prioritizes Burley and trailer work as its own category', () => {
     expect(getExerciseCategory(exercise({ name: 'controlled trailer towing workout', equipment: ['bike', 'trailer'] }))).toBe(
-      'Burley / loaded trailer',
+      'Burley & Trailer Work',
     )
   })
 
   it('groups anti-rotation core when no more specific category applies', () => {
     expect(getExerciseCategory(exercise({ name: 'Pallof press', targetAreas: ['core'], bikeTourPurpose: ['anti-rotation'] }))).toBe(
-      'core / anti-rotation',
+      'Core Stability',
     )
   })
 
   it('groups single-leg work separately from general posterior-chain work', () => {
     expect(getExerciseCategory(exercise({ name: 'single-leg Romanian deadlift', targetAreas: ['hamstrings', 'glutes'] }))).toBe(
-      'single-leg leg strength',
+      'Single-Leg Strength',
     )
   })
 })

@@ -46,14 +46,16 @@ export interface ExerciseDefaults {
 }
 
 export type ExerciseGroup =
-  | 'Core'
-  | 'Back and Posture'
-  | 'Hinge and Posterior Chain'
-  | 'Legs and Hill Climbing'
-  | 'Carries and Loaded Conditioning'
-  | 'Mobility and Yoga'
-  | 'Bike and Outdoor Conditioning'
-  | 'Recovery and Prehab'
+  | 'Mobility & Yoga'
+  | 'Core Stability'
+  | 'Upper Back & Posture'
+  | 'Hinge & Posterior Chain'
+  | 'Single-Leg Strength'
+  | 'Carry & Load Transfer'
+  | 'Balance & Control'
+  | 'Recovery'
+  | 'Burley & Trailer Work'
+  | 'Ride Sessions'
 
 export type BikeTourPurpose =
   | 'anti-extension'
@@ -72,9 +74,15 @@ export interface Exercise {
   id: ID
   name: string
   description: string
+  purpose?: string
+  setup?: string
   instructions: string[]
   formCues: string[]
   commonMistakes: string[]
+  regressions?: string[]
+  progressions?: string[]
+  dose?: string
+  safety?: string[]
   targetAreas: string[]
   equipment: EquipmentKind[]
   difficulty: Difficulty
@@ -121,6 +129,7 @@ export interface ExerciseLogEntry {
   workoutLogId: ID
   routineExerciseId?: ID
   exerciseId: ID
+  equipmentKey?: string
   exerciseName: string
   sets?: number
   reps?: string
@@ -244,6 +253,7 @@ export interface SchedulePreference {
 export interface PersonalExerciseDefault extends ExerciseDefaults {
   id: ID
   exerciseId: ID
+  equipmentKey?: string
   updatedAt: string
   source: 'user' | 'last-log'
   reuseLastNote?: boolean
@@ -327,6 +337,7 @@ export interface AppData {
 export interface WorkoutDraftEntry {
   routineExerciseId?: ID
   exerciseId: ID
+  equipmentKey?: string
   exerciseName: string
   sets?: number
   reps?: string

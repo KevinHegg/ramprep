@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Exercise, ExerciseLogEntry, PersonalExerciseDefault, RoutineExercise, WorkoutLog } from '../types'
-import { resolveExerciseLogDefaults } from './defaults'
+import { defaultKeyForExercise, personalDefaultForExercise, resolveExerciseLogDefaults } from './defaults'
 
 const exercise: Exercise = {
   id: 'goblet-squat',
@@ -39,6 +39,29 @@ const recentEntry: ExerciseLogEntry = {
 }
 
 describe('exercise log defaults', () => {
+  it('selects remembered defaults by exercise and equipment with legacy fallback', () => {
+    const defaults: PersonalExerciseDefault[] = [
+      {
+        id: `default-${exercise.id}`,
+        exerciseId: exercise.id,
+        weight: 20,
+        updatedAt: '2026-05-01T00:00:00.000Z',
+        source: 'last-log',
+      },
+      {
+        id: defaultKeyForExercise(exercise.id, 'dumbbell'),
+        exerciseId: exercise.id,
+        equipmentKey: 'dumbbell',
+        weight: 45,
+        updatedAt: '2026-06-01T00:00:00.000Z',
+        source: 'last-log',
+      },
+    ]
+
+    expect(personalDefaultForExercise(defaults, exercise.id, 'dumbbell')?.weight).toBe(45)
+    expect(personalDefaultForExercise(defaults, exercise.id, 'kettlebell')?.weight).toBe(20)
+  })
+
   it('uses personal defaults before recent, routine, and seed defaults', () => {
     const personalDefault: PersonalExerciseDefault = {
       id: `default-${exercise.id}`,

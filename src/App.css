@@ -81,7 +81,8 @@
 
 .topbar h1 {
   margin: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
   color: var(--text-strong);
   font-size: 34px;
   line-height: 1.05;
@@ -592,9 +593,22 @@ label > span,
 
 .exercise-card {
   display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
+.exercise-card-main {
+  display: grid;
   grid-template-columns: minmax(74px, 92px) minmax(0, 1fr);
   gap: 12px;
   align-items: start;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
 }
 
 .exercise-card img,
@@ -684,6 +698,72 @@ label > span,
   justify-content: space-between;
 }
 
+.card-actions.compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  width: 100%;
+}
+
+.compact-cta {
+  min-height: 44px;
+  padding: 0 12px;
+}
+
+.action-menu {
+  position: relative;
+}
+
+.action-menu summary {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-strong);
+  background: var(--surface);
+  cursor: pointer;
+  list-style: none;
+}
+
+.action-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.action-menu-panel {
+  position: absolute;
+  z-index: 12;
+  right: 0;
+  bottom: calc(100% + 6px);
+  display: grid;
+  min-width: 188px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-strong);
+}
+
+.action-menu-panel button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-strong);
+  background: transparent;
+  font-weight: 800;
+  text-align: left;
+}
+
+.action-menu-panel button:hover,
+.action-menu-panel button:focus-visible {
+  background: var(--surface-2);
+}
+
 .compact-action-row {
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -692,6 +772,11 @@ label > span,
 .row-meta-actions {
   flex-wrap: wrap;
   justify-content: space-between;
+}
+
+.row-menu-line {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .last-values-row {
@@ -809,7 +894,8 @@ label > span,
 .stepper-row button,
 .increment-row button,
 .effort-row button,
-.wheel-picker button {
+.quick-chip-row button,
+.picker-wheel button {
   min-height: 48px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -830,32 +916,53 @@ label > span,
   background: var(--surface-2);
 }
 
-.stepper-row input {
+.stepper-value {
   text-align: center;
   font-size: 18px;
   font-weight: 850;
 }
 
-.wheel-picker summary {
-  min-height: 36px;
-  color: var(--text-strong);
-  font-size: 12px;
-  font-weight: 850;
-  cursor: pointer;
-}
-
-.wheel-picker div,
+.quick-chip-row,
 .effort-row {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
 }
 
-.wheel-picker button.active,
+.quick-chip-row button {
+  min-height: 36px;
+  font-size: 12px;
+}
+
+.quick-chip-row button.active,
+.picker-wheel button.active,
 .effort-row button.active {
   color: white;
   background: var(--accent);
   border-color: var(--accent);
+}
+
+.number-picker-sheet {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 520px);
+  max-height: min(78svh, 640px);
+  margin: 0 auto;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px 14px 8px 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-strong);
+}
+
+.picker-wheel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .burley-panel,
@@ -1130,7 +1237,8 @@ label > span,
 }
 
 .demo-sheet {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   max-height: min(84svh, 760px);
   width: min(100%, 620px);
@@ -1145,8 +1253,10 @@ label > span,
 
 .demo-sheet .motion-card {
   width: 100%;
+  height: clamp(170px, 48vw, 230px);
+  min-height: 170px;
   max-height: 230px;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: auto;
 }
 
 .demo-meta {
@@ -1177,6 +1287,10 @@ label > span,
 
 .demo-section li + li {
   margin-top: 5px;
+}
+
+.two-column-section {
+  grid-template-columns: 1fr;
 }
 
 .demo-attribution {
@@ -1313,6 +1427,38 @@ label > span,
   background: var(--surface-2);
 }
 
+@media (max-width: 520px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+
+  .brand-lockup {
+    align-items: flex-start;
+  }
+
+  .brand-mark {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+
+  .brand-mark svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  .topbar h1 {
+    font-size: 30px;
+  }
+
+  .status-pill {
+    min-height: 38px;
+    padding: 0 8px;
+  }
+}
+
 @media (min-width: 760px) {
   .app-shell {
     padding: 24px 24px 112px;
@@ -1341,6 +1487,10 @@ label > span,
   }
 
   .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .two-column-section {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
