@@ -112,6 +112,13 @@ export const ensureV11Seeds = async () => {
       }
       if (!existingRoadmap) {
         await db.tourRoadmaps.add({ ...seedRoadmap, updatedAt: nowIso() })
+      } else {
+        const seedPhaseById = new Map(seedRoadmap.phases.map((phase) => [phase.id, phase]))
+        await db.tourRoadmaps.put({
+          ...existingRoadmap,
+          phases: existingRoadmap.phases.map((phase) => seedPhaseById.get(phase.id) ?? phase),
+          updatedAt: nowIso(),
+        })
       }
       if (schedule) {
         await db.schedulePreferences.put({

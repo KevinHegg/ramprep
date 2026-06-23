@@ -6,16 +6,21 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  CircleHelp,
   ClipboardList,
+  Compass,
   Copy,
   Download,
   Dumbbell,
   Flame,
   Map as MapIcon,
+  Pencil,
   Plus,
   RefreshCcw,
+  RotateCcw,
   Route,
   Save,
+  Search,
   Settings,
   Trash2,
   Upload,
@@ -65,6 +70,7 @@ import {
 } from './utils/schedule'
 import { formatShortDate } from './utils/date'
 import { firstNumber, mostRecentCompletedEntry, resolveExerciseLogDefaults } from './utils/defaults'
+import { functionalCategories, getExerciseCategory, type FunctionalCategory } from './utils/exerciseCategories'
 import { validateGoogleAppsScriptUrl } from './services/googleSheetsSync'
 import type {
   AppData,
@@ -262,6 +268,7 @@ const NumberStepper = ({
   suffix = '',
   onChange,
   quickOptions,
+  quickIncrements,
 }: {
   label: string
   value?: number
@@ -271,9 +278,11 @@ const NumberStepper = ({
   suffix?: string
   onChange: (value: number | undefined) => void
   quickOptions?: number[]
+  quickIncrements?: number[]
 }) => {
   const current = value ?? min
   const clamp = (next: number) => Math.max(min, Math.min(max, Number(next.toFixed(2))))
+  const increments = quickIncrements ?? [step, step * 5, step * 10].filter((item, index, array) => item > 0 && array.indexOf(item) === index)
 
   return (
     <div className="stepper-control">
@@ -298,17 +307,24 @@ const NumberStepper = ({
           +
         </button>
       </div>
+      <div className="increment-row" aria-label={`${label} quick increments`}>
+        {increments.map((increment) => (
+          <button key={`${label}-plus-${increment}`} type="button" onClick={() => onChange(clamp(current + increment))}>
+            +{increment}
+          </button>
+        ))}
+      </div>
       {quickOptions?.length ? <NumberWheelPicker label={label} value={value} options={quickOptions} onChange={onChange} /> : null}
     </div>
   )
 }
 
 const WeightPicker = ({ units, value, onChange }: { units: string; value?: number; onChange: (value: number | undefined) => void }) => (
-  <NumberStepper label="Weight" value={value} min={0} max={500} step={units === 'kg' ? 2.5 : 5} suffix={` ${units}`} quickOptions={units === 'kg' ? [0, 8, 12, 16, 20, 24, 32] : [0, 20, 25, 30, 35, 40, 45, 53]} onChange={onChange} />
+  <NumberStepper label="Weight" value={value} min={0} max={500} step={units === 'kg' ? 2.5 : 5} suffix={` ${units}`} quickOptions={units === 'kg' ? [0, 8, 12, 16, 20, 24, 32] : [0, 20, 25, 30, 35, 40, 45, 53]} quickIncrements={units === 'kg' ? [1, 2.5, 5] : [5, 10, 25]} onChange={onChange} />
 )
 
 const DurationPicker = ({ label = 'Seconds', value, onChange }: { label?: string; value?: number; onChange: (value: number | undefined) => void }) => (
-  <NumberStepper label={label} value={value} min={0} max={14400} step={label === 'Minutes' ? 5 : 10} suffix={label === 'Minutes' ? ' min' : 's'} quickOptions={label === 'Minutes' ? [10, 20, 30, 45, 60, 90] : [20, 30, 45, 60, 90, 120]} onChange={onChange} />
+  <NumberStepper label={label} value={value} min={0} max={14400} step={label === 'Minutes' ? 5 : 10} suffix={label === 'Minutes' ? ' min' : 's'} quickOptions={label === 'Minutes' ? [10, 20, 30, 45, 60, 90] : [20, 30, 45, 60, 90, 120]} quickIncrements={label === 'Minutes' ? [1, 5, 10] : [5, 10, 30]} onChange={onChange} />
 )
 
 const EffortPicker = ({ value, onChange }: { value?: number; onChange: (value: number | undefined) => void }) => (
@@ -342,6 +358,100 @@ const ExerciseMotion = ({ exercise }: { exercise: Exercise }) => (
   </div>
 )
 
+const LogoMark = () => (
+  <span className="brand-mark" aria-hidden="true">
+    <svg viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="27" />
+      <path d="M17 40c8-13 17-20 27-22" />
+      <path d="M18 25c11 3 20 9 28 20" />
+      <path d="M32 11v42M11 32h42" />
+    </svg>
+  </span>
+)
+
+const ExerciseDemoButton = ({ exercise, onOpen, compact = false }: { exercise: Exercise; onOpen: (id: string) => void; compact?: boolean }) => (
+  <button className={compact ? 'demo-button compact' : 'demo-button'} type="button" onClick={() => onOpen(exercise.id)}>
+    <CircleHelp aria-hidden="true" size={compact ? 16 : 18} />
+    <span>How to</span>
+  </button>
+)
+
+const CategoryChips = ({
+  value,
+  onChange,
+}: {
+  value: FunctionalCategory | ''
+  onChange: (value: FunctionalCategory | '') => void
+}) => (
+  <div className="category-chip-row" aria-label="Training category filters">
+    <button className={!value ? 'active' : ''} type="button" onClick={() => onChange('')}>
+      All
+    </button>
+    {functionalCategories.map((category) => (
+      <button className={value === category ? 'active' : ''} key={category} type="button" onClick={() => onChange(category)}>
+        {category}
+      </button>
+    ))}
+  </div>
+)
+
+const ExerciseDemoSheet = ({
+  exercise,
+  media,
+  onClose,
+}: {
+  exercise: Exercise
+  media?: AppData['exerciseMedia'][number]
+  onClose: () => void
+}) => (
+  <div className="sheet-backdrop" role="presentation" onClick={onClose}>
+    <section className="demo-sheet" role="dialog" aria-modal="true" aria-labelledby="demo-title" onClick={(event) => event.stopPropagation()}>
+      <div className="section-title">
+        <div>
+          <p className="eyebrow">Exercise demo</p>
+          <h2 id="demo-title">{exercise.name}</h2>
+        </div>
+        <button className="icon-button" type="button" aria-label="Close demo" onClick={onClose}>
+          <X aria-hidden="true" size={18} />
+        </button>
+      </div>
+      <ExerciseMotion exercise={exercise} />
+      <div className="demo-meta">
+        <span className="tag">{getExerciseCategory(exercise)}</span>
+        <span className="tag">{exercise.difficulty}</span>
+      </div>
+      <div className="demo-section">
+        <h3>Steps</h3>
+        <ol>
+          {exercise.instructions.map((step, stepIndex) => (
+            <li key={`${exercise.id}-step-${stepIndex}`}>{step}</li>
+          ))}
+        </ol>
+      </div>
+      <div className="demo-section">
+        <h3>Primary muscles / category</h3>
+        <p>{exercise.targetAreas.join(', ') || getExerciseCategory(exercise)}</p>
+      </div>
+      <div className="demo-section">
+        <h3>Equipment</h3>
+        <p>{exercise.equipment.join(', ') || 'none'}</p>
+      </div>
+      <div className="demo-section">
+        <h3>Form cues</h3>
+        <ul>
+          {exercise.formCues.slice(0, 4).map((cue, cueIndex) => (
+            <li key={`${exercise.id}-cue-${cueIndex}`}>{cue}</li>
+          ))}
+        </ul>
+      </div>
+      <p className="demo-attribution">
+        {media?.attributionText ?? exercise.attribution ?? 'Original RampRep written instructions.'}
+        {media?.licenseName ? ` License: ${media.licenseName}.` : ''}
+      </p>
+    </section>
+  </div>
+)
+
 function App() {
   const [page, setPage] = useState<Page>('dashboard')
   const [data, setData] = useState<AppData | null>(null)
@@ -350,11 +460,13 @@ function App() {
   const [selectedRoutineId, setSelectedRoutineId] = useState('')
   const [workoutsTab, setWorkoutsTab] = useState<WorkoutsTab>('routines')
   const [libraryQuery, setLibraryQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<FunctionalCategory | ''>('')
   const [groupFilter, setGroupFilter] = useState('')
   const [equipmentFilter, setEquipmentFilter] = useState('')
   const [purposeFilter, setPurposeFilter] = useState('')
   const [routineDraft, setRoutineDraft] = useState<Routine | null>(null)
   const [exerciseDraft, setExerciseDraft] = useState<Exercise | null>(null)
+  const [demoExerciseId, setDemoExerciseId] = useState('')
   const [draftEntries, setDraftEntries] = useState<WorkoutDraftEntry[]>([])
   const [logMode, setLogMode] = useState<LogMode>('recommended')
   const [durationMinutes, setDurationMinutes] = useState(30)
@@ -557,6 +669,55 @@ function App() {
     ])
   }
 
+  const applyExerciseToDraftEntry = (index: number, exercise: Exercise) => {
+    const recentEntry = data ? mostRecentCompletedEntry(exercise.id, data.exerciseLogEntries, data.workoutLogs) : undefined
+    const personalDefault = data?.personalExerciseDefaults.find((item) => item.exerciseId === exercise.id)
+    const remembered = resolveExerciseLogDefaults({ exercise, personalDefault, recentEntry, units: data?.settings.units })
+
+    setDraftEntries((current) =>
+      (current.length ? current : visibleDraftEntries).map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              exerciseId: exercise.id,
+              exerciseName: exercise.name,
+              sets: remembered.sets ?? exercise.defaults.sets,
+              reps: remembered.reps ?? exercise.defaults.reps,
+              weight: remembered.weight ?? exercise.defaults.weight,
+              durationSeconds: remembered.durationSeconds ?? exercise.defaults.durationSeconds,
+              distance: remembered.distance ?? exercise.defaults.distance,
+              effort: remembered.effort ?? exercise.defaults.effort ?? 6,
+              lastSummary: remembered.lastSummary,
+            }
+          : item,
+      ),
+    )
+  }
+
+  const resetDraftEntryToSeedDefaults = (index: number) => {
+    const exercise = exerciseById.get(visibleDraftEntries[index]?.exerciseId)
+    if (!exercise) {
+      return
+    }
+
+    setDraftEntries((current) =>
+      (current.length ? current : visibleDraftEntries).map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              sets: exercise.defaults.sets,
+              reps: exercise.defaults.reps,
+              weight: exercise.defaults.weight,
+              durationSeconds: exercise.defaults.durationSeconds,
+              distance: exercise.defaults.distance,
+              effort: exercise.defaults.effort ?? 6,
+              lastSummary: undefined,
+            }
+          : item,
+      ),
+    )
+  }
+
   const saveQuickExercise = async () => {
     const name = quickExerciseName.trim()
     if (!name) {
@@ -693,32 +854,58 @@ function App() {
 
     return (
       (!query || searchable.includes(query)) &&
+      (!categoryFilter || getExerciseCategory(exercise) === categoryFilter) &&
       (!groupFilter || exercise.group === groupFilter) &&
       (!equipmentFilter || exercise.equipment.includes(equipmentFilter as EquipmentKind)) &&
       (!purposeFilter || exercise.bikeTourPurpose?.includes(purposeFilter as BikeTourPurpose))
     )
   })
   const syncValidation = validateGoogleAppsScriptUrl(settingsDraft.googleAppsScriptUrl)
+  const demoExercise = demoExerciseId ? exerciseById.get(demoExerciseId) : undefined
+  const demoMedia = demoExercise ? data.exerciseMedia.find((media) => media.exerciseId === demoExercise.id) : undefined
+  const ownedEquipmentKinds = new Set(data.equipment.filter((item) => item.owned).map((item) => item.kind))
+  const roadmapGuidance = [
+    `${data.schedule.weeklyFrequency} planned sessions/week across ${data.schedule.preferredDays.map(dayName).join(', ') || 'flex days'}.`,
+    data.schedule.travelMode
+      ? 'Travel mode: choose bodyweight core, mobility prep, walks, and short recovery sessions.'
+      : ownedEquipmentKinds.has('bike')
+      ? 'Bike available: keep one easy endurance or hill-support ride in the week.'
+      : 'No bike marked owned yet: use walks, carries, hips, and core until rides are available.',
+    data.schedule.busyWorkWeek
+      ? 'Busy week: use the shortest useful session and keep the consistency streak alive.'
+      : 'Normal week: pair two strength/mobility sessions with one longer aerobic outing.',
+    data.schedule.hillFocusWeek
+      ? 'Hill focus: prioritize step-ups, split squats, low-cadence climbs, calves, and posterior chain.'
+      : 'Long-ride progression: add time gradually, then practice back-to-back days in later phases.',
+    data.schedule.recoveryWeek
+      ? 'Recovery week: reduce intensity, use mobility, and watch soreness before adding volume.'
+      : 'Recovery rhythm: keep every fourth week lighter or switch to recovery mode when soreness rises.',
+  ]
 
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">RampRep</p>
-          <h1>
-            {page === 'dashboard' && 'Today'}
-            {page === 'workouts' && 'Workouts'}
-            {page === 'log' && 'Workout Log'}
-            {page === 'progress' && 'Progress'}
-            {page === 'settings' && 'Settings'}
-            {page === 'roadmap' && 'Tour Roadmap'}
-          </h1>
+        <div className="brand-lockup">
+          <LogoMark />
+          <div>
+            <p className="eyebrow">RampRep · Ride Across America Preparation</p>
+            <h1>
+              {page === 'dashboard' && 'Today'}
+              {page === 'workouts' && 'Workouts'}
+              {page === 'log' && 'Workout Log'}
+              {page === 'progress' && 'Progress'}
+              {page === 'settings' && 'Settings'}
+              {page === 'roadmap' && 'Tour Roadmap'}
+            </h1>
+          </div>
         </div>
         <div className="status-pill">
           <Flame aria-hidden="true" size={18} />
           {streak} day streak
         </div>
       </header>
+
+      {demoExercise && <ExerciseDemoSheet exercise={demoExercise} media={demoMedia} onClose={() => setDemoExerciseId('')} />}
 
       {flash && (
         <div className="toast" role="status">
@@ -931,15 +1118,7 @@ function App() {
                       Name
                       <input value={activeRoutineDraft.name} onChange={(event) => setRoutineDraft({ ...activeRoutineDraft, name: event.target.value })} />
                     </label>
-                    <label>
-                      Minutes
-                      <input
-                        inputMode="numeric"
-                        type="number"
-                        value={activeRoutineDraft.estimatedMinutes}
-                        onChange={(event) => setRoutineDraft({ ...activeRoutineDraft, estimatedMinutes: Number(event.target.value) })}
-                      />
-                    </label>
+                    <DurationPicker label="Minutes" value={activeRoutineDraft.estimatedMinutes} onChange={(value) => setRoutineDraft({ ...activeRoutineDraft, estimatedMinutes: value ?? activeRoutineDraft.estimatedMinutes })} />
                     <label>
                       Type
                       <select value={activeRoutineDraft.type} onChange={(event) => setRoutineDraft({ ...activeRoutineDraft, type: event.target.value as Routine['type'] })}>
@@ -975,28 +1154,38 @@ function App() {
                                 </option>
                               ))}
                             </select>
-                            <small>{prescription(entry, exercise)}</small>
+                            <div className="row-meta-actions">
+                              <small>{prescription(entry, exercise)}</small>
+                              {exercise && <ExerciseDemoButton exercise={exercise} onOpen={setDemoExerciseId} compact />}
+                            </div>
                           </div>
-                          <div className="mini-grid">
-                            <input
-                              aria-label="Sets"
-                              defaultValue={entry.sets ?? ''}
-                              inputMode="numeric"
-                              placeholder="sets"
-                              onBlur={(event) => void saveRoutineExercise({ ...entry, sets: numberOrUndefined(event.target.value) }).then(refresh)}
+                          <div className="mini-stepper-grid">
+                            <NumberStepper
+                              label="Sets"
+                              value={entry.sets}
+                              min={0}
+                              max={12}
+                              step={1}
+                              quickOptions={[1, 2, 3, 4, 5]}
+                              onChange={(value) => void saveRoutineExercise({ ...entry, sets: value }).then(refresh)}
                             />
-                            <input
-                              aria-label="Reps"
-                              defaultValue={entry.reps ?? ''}
-                              placeholder="reps"
-                              onBlur={(event) => void saveRoutineExercise({ ...entry, reps: event.target.value || undefined }).then(refresh)}
+                            <NumberStepper
+                              label="Reps"
+                              value={firstNumber(entry.reps)}
+                              min={0}
+                              max={60}
+                              step={1}
+                              quickOptions={[5, 8, 10, 12, 15, 20]}
+                              onChange={(value) => void saveRoutineExercise({ ...entry, reps: value == null ? undefined : String(value) }).then(refresh)}
                             />
-                            <input
-                              aria-label="Seconds"
-                              defaultValue={entry.durationSeconds ?? ''}
-                              inputMode="numeric"
-                              placeholder="sec"
-                              onBlur={(event) => void saveRoutineExercise({ ...entry, durationSeconds: numberOrUndefined(event.target.value) }).then(refresh)}
+                            <NumberStepper
+                              label="Seconds"
+                              value={entry.durationSeconds}
+                              min={0}
+                              max={3600}
+                              step={10}
+                              quickOptions={[20, 30, 45, 60, 90, 120]}
+                              onChange={(value) => void saveRoutineExercise({ ...entry, durationSeconds: value }).then(refresh)}
                             />
                           </div>
                           <div className="toolbar">
@@ -1054,9 +1243,12 @@ function App() {
             <>
               <Card>
                 <label>
-                  Search
+                  <span>
+                    <Search aria-hidden="true" size={15} /> Search
+                  </span>
                   <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="core, back, dumbbell..." />
                 </label>
+                <CategoryChips value={categoryFilter} onChange={setCategoryFilter} />
                 <div className="form-grid filter-grid">
                   <label>
                     Group
@@ -1098,7 +1290,7 @@ function App() {
                   <Card key={exercise.id} className="exercise-card">
                     <ExerciseMotion exercise={exercise} />
                     <div>
-                      <p className="eyebrow">{exercise.group ?? exercise.equipment.join(', ')}</p>
+                      <p className="eyebrow">{getExerciseCategory(exercise)}</p>
                       <h2>{exercise.name}</h2>
                       <p>{exercise.description}</p>
                       <div className="tag-row">
@@ -1110,9 +1302,12 @@ function App() {
                       </div>
                       <small>{data.exerciseMedia.find((media) => media.exerciseId === exercise.id)?.attributionText ?? exercise.attribution}</small>
                     </div>
-                    <button className="ghost-button" type="button" onClick={() => setExerciseDraft({ ...exercise })}>
-                      Edit
-                    </button>
+                    <div className="card-actions">
+                      <ExerciseDemoButton exercise={exercise} onOpen={setDemoExerciseId} />
+                      <button className="icon-button tertiary" type="button" aria-label={`Edit ${exercise.name}`} onClick={() => setExerciseDraft({ ...exercise })}>
+                        <Pencil aria-hidden="true" size={17} />
+                      </button>
+                    </div>
                   </Card>
                 ))}
               </section>
@@ -1190,26 +1385,28 @@ function App() {
                     ))}
                   </div>
                   <div className="form-grid">
-                    <label>
-                      Default sets
-                      <input
-                        value={exerciseDraft.defaults.sets ?? ''}
-                        inputMode="numeric"
-                        onChange={(event) => setExerciseDraft({ ...exerciseDraft, defaults: { ...exerciseDraft.defaults, sets: numberOrUndefined(event.target.value) } })}
-                      />
-                    </label>
-                    <label>
-                      Default reps
-                      <input value={exerciseDraft.defaults.reps ?? ''} onChange={(event) => setExerciseDraft({ ...exerciseDraft, defaults: { ...exerciseDraft.defaults, reps: event.target.value } })} />
-                    </label>
-                    <label>
-                      Default seconds
-                      <input
-                        value={exerciseDraft.defaults.durationSeconds ?? ''}
-                        inputMode="numeric"
-                        onChange={(event) => setExerciseDraft({ ...exerciseDraft, defaults: { ...exerciseDraft.defaults, durationSeconds: numberOrUndefined(event.target.value) } })}
-                      />
-                    </label>
+                    <NumberStepper
+                      label="Default sets"
+                      value={exerciseDraft.defaults.sets}
+                      min={0}
+                      max={20}
+                      step={1}
+                      quickOptions={[1, 2, 3, 4, 5]}
+                      onChange={(value) => setExerciseDraft({ ...exerciseDraft, defaults: { ...exerciseDraft.defaults, sets: value } })}
+                    />
+                    <NumberStepper
+                      label="Default reps"
+                      value={firstNumber(exerciseDraft.defaults.reps)}
+                      min={0}
+                      max={100}
+                      step={1}
+                      quickOptions={[5, 8, 10, 12, 15, 20]}
+                      onChange={(value) => setExerciseDraft({ ...exerciseDraft, defaults: { ...exerciseDraft.defaults, reps: value == null ? undefined : String(value) } })}
+                    />
+                    <DurationPicker
+                      value={exerciseDraft.defaults.durationSeconds}
+                      onChange={(value) => setExerciseDraft({ ...exerciseDraft, defaults: { ...exerciseDraft.defaults, durationSeconds: value } })}
+                    />
                   </div>
                   <label>
                     YouTube embed URL
@@ -1286,6 +1483,13 @@ function App() {
               <h2>Add Any Exercise</h2>
               <Plus aria-hidden="true" size={20} />
             </div>
+            <label>
+              <span>
+                <Search aria-hidden="true" size={15} /> Search library
+              </span>
+              <input value={libraryQuery} onChange={(event) => setLibraryQuery(event.target.value)} placeholder="anti-rotation, trailer, row..." />
+            </label>
+            <CategoryChips value={categoryFilter} onChange={setCategoryFilter} />
             <div className="form-grid">
               <label>
                 Search/select
@@ -1325,13 +1529,25 @@ function App() {
           <section className="exercise-stack">
             {visibleDraftEntries.map((entry, index) => {
               const routineEntry = routineExercises.find((item) => item.id === entry.routineExerciseId)
+              const exercise = exerciseById.get(entry.exerciseId)
               return (
                 <Card key={entry.routineExerciseId ?? entry.exerciseId}>
                   <div className="section-title">
                     <h2>{entry.exerciseName}</h2>
-                    <span className="tag">effort {entry.effort ?? '-'}</span>
+                    <div className="compact-action-row">
+                      {exercise && <ExerciseDemoButton exercise={exercise} onOpen={setDemoExerciseId} compact />}
+                      <span className="tag">effort {entry.effort ?? '-'}</span>
+                    </div>
                   </div>
-                  {entry.lastSummary && <p className="last-summary">{entry.lastSummary}</p>}
+                  {entry.lastSummary && (
+                    <div className="last-values-row">
+                      <p className="last-summary">Using last values · {entry.lastSummary.replace('Last: ', '')}</p>
+                      <button className="text-icon-button" type="button" onClick={() => resetDraftEntryToSeedDefaults(index)}>
+                        <RotateCcw aria-hidden="true" size={15} />
+                        Reset
+                      </button>
+                    </div>
+                  )}
                   {routineEntry?.variationOptions?.length ? (
                     <label>
                       Variation
@@ -1356,6 +1572,24 @@ function App() {
                       </select>
                     </label>
                   ) : null}
+                  <label className="swap-control">
+                    Swap exercise
+                    <select
+                      value={entry.exerciseId}
+                      onChange={(event) => {
+                        const nextExercise = exerciseById.get(event.target.value)
+                        if (nextExercise) {
+                          applyExerciseToDraftEntry(index, nextExercise)
+                        }
+                      }}
+                    >
+                      {exercises.map((exerciseOption) => (
+                        <option key={exerciseOption.id} value={exerciseOption.id}>
+                          {exerciseOption.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <div className="log-grid thumb-grid">
                     <NumberStepper
                       label="Sets"
@@ -1512,8 +1746,9 @@ function App() {
                   </div>
                   <div className="toolbar">
                     <button
-                      className="ghost-button"
+                      className="icon-button tertiary"
                       type="button"
+                      aria-label={`Edit ${log.routineName}`}
                       onClick={() =>
                         setEditLog({
                           log: { ...log },
@@ -1521,7 +1756,7 @@ function App() {
                         })
                       }
                     >
-                      Edit
+                      <Pencil aria-hidden="true" size={17} />
                     </button>
                     <button
                       className="icon-button danger"
@@ -1555,18 +1790,38 @@ function App() {
                   Date/time
                   <input value={editLog.log.completedAt.slice(0, 16)} type="datetime-local" onChange={(event) => setEditLog({ ...editLog, log: { ...editLog.log, completedAt: new Date(event.target.value).toISOString() } })} />
                 </label>
-                <label>
-                  Minutes
-                  <input value={editLog.log.totalMinutes ?? ''} inputMode="numeric" onChange={(event) => setEditLog({ ...editLog, log: { ...editLog.log, totalMinutes: numberOrUndefined(event.target.value) } })} />
-                </label>
+                <DurationPicker label="Minutes" value={editLog.log.totalMinutes} onChange={(value) => setEditLog({ ...editLog, log: { ...editLog.log, totalMinutes: value } })} />
               </div>
               {editLog.entries.map((entry, index) => (
                 <div className="exercise-edit-row" key={entry.id}>
-                  <strong>{entry.exerciseName}</strong>
-                  <div className="mini-grid">
-                    <input aria-label="Sets" value={entry.sets ?? ''} onChange={(event) => setEditLog({ ...editLog, entries: editLog.entries.map((item, itemIndex) => (itemIndex === index ? { ...item, sets: numberOrUndefined(event.target.value) } : item)) })} />
-                    <input aria-label="Reps" value={entry.reps ?? ''} onChange={(event) => setEditLog({ ...editLog, entries: editLog.entries.map((item, itemIndex) => (itemIndex === index ? { ...item, reps: event.target.value } : item)) })} />
-                    <input aria-label="Weight" value={entry.weight ?? ''} onChange={(event) => setEditLog({ ...editLog, entries: editLog.entries.map((item, itemIndex) => (itemIndex === index ? { ...item, weight: numberOrUndefined(event.target.value) } : item)) })} />
+                  <div className="section-title">
+                    <strong>{entry.exerciseName}</strong>
+                    {exerciseById.get(entry.exerciseId) && <ExerciseDemoButton exercise={exerciseById.get(entry.exerciseId)!} onOpen={setDemoExerciseId} compact />}
+                  </div>
+                  <div className="mini-stepper-grid">
+                    <NumberStepper
+                      label="Sets"
+                      value={entry.sets}
+                      min={0}
+                      max={20}
+                      step={1}
+                      quickOptions={[1, 2, 3, 4, 5]}
+                      onChange={(value) => setEditLog({ ...editLog, entries: editLog.entries.map((item, itemIndex) => (itemIndex === index ? { ...item, sets: value } : item)) })}
+                    />
+                    <NumberStepper
+                      label="Reps"
+                      value={firstNumber(entry.reps)}
+                      min={0}
+                      max={100}
+                      step={1}
+                      quickOptions={[5, 8, 10, 12, 15, 20]}
+                      onChange={(value) => setEditLog({ ...editLog, entries: editLog.entries.map((item, itemIndex) => (itemIndex === index ? { ...item, reps: value == null ? undefined : String(value) } : item)) })}
+                    />
+                    <WeightPicker
+                      units={data.settings.units}
+                      value={entry.weight}
+                      onChange={(value) => setEditLog({ ...editLog, entries: editLog.entries.map((item, itemIndex) => (itemIndex === index ? { ...item, weight: value } : item)) })}
+                    />
                   </div>
                 </div>
               ))}
@@ -1667,6 +1922,18 @@ function App() {
             <button className="primary-button" type="button" onClick={() => setPage('dashboard')}>
               Dashboard
             </button>
+          </Card>
+
+          <Card className="roadmap-guidance-card">
+            <div className="section-title">
+              <h2>This Week's Roadmap Read</h2>
+              <Compass aria-hidden="true" size={20} />
+            </div>
+            <div className="guidance-list">
+              {roadmapGuidance.map((item) => (
+                <p key={item}>{item}</p>
+              ))}
+            </div>
           </Card>
 
           {data.roadmap.phases

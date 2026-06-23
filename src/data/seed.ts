@@ -595,6 +595,10 @@ const extraExerciseSeeds: ExerciseSeed[] = [
   quickExercise('recovery-spin', 'recovery spin', 'Recovery and Prehab', ['bike'], ['recovery'], { durationSeconds: 1800, effort: 2 }, ['recovery'], 'Easy spin to move blood without adding fatigue.'),
   quickExercise('walk-hike', 'walk/hike', 'Bike and Outdoor Conditioning', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 2700, effort: 3 }, ['ride conditioning'], 'Low-stress outdoor conditioning for busy weeks.'),
   quickExercise('burley-loaded-trailer-ride', 'Burley loaded trailer ride', 'Bike and Outdoor Conditioning', ['bike', 'trailer'], ['aerobic base', 'trunk', 'handling'], { durationSeconds: 2700, distance: '8 mi', effort: 5 }, ['trailer handling', 'loaded-bike durability'], 'Gentle trailer conditioning with dog comfort as the first constraint.'),
+  quickExercise('trailer-walk', 'trailer walk', 'Bike and Outdoor Conditioning', ['trailer', 'bodyweight'], ['handling', 'aerobic base'], { durationSeconds: 1200, effort: 3 }, ['trailer handling', 'recovery'], 'Low-speed trailer handling practice on foot before dog-loaded riding.'),
+  quickExercise('loaded-carry-for-trailer-days', 'loaded carry for trailer days', 'Carries and Loaded Conditioning', ['carry', 'dumbbell', 'kettlebell'], ['trunk', 'grip', 'load tolerance'], { sets: 4, durationSeconds: 45, effort: 6 }, ['loaded-bike durability'], 'Carry work that builds trunk stiffness for loaded bike and trailer handling.'),
+  quickExercise('controlled-trailer-towing-workout', 'controlled trailer towing workout', 'Bike and Outdoor Conditioning', ['bike', 'trailer'], ['handling', 'aerobic base', 'trunk'], { durationSeconds: 2400, distance: '5 mi', effort: 4 }, ['trailer handling', 'loaded-bike durability'], 'Short controlled towing session with stops, turns, braking practice, and comfort checks.'),
+  quickExercise('easy-tour-specificity-session', 'easy tour specificity session', 'Bike and Outdoor Conditioning', ['bike'], ['aerobic base', 'pacing'], { durationSeconds: 3600, distance: '12 mi', effort: 4 }, ['ride conditioning', 'loaded-bike durability'], 'Easy touring-specific session for pacing, gear checks, nutrition notes, and steady effort.'),
 ]
 
 export const seedExercises = [...exerciseSeeds, ...extraExerciseSeeds].map(makeExercise)
@@ -739,11 +743,11 @@ export const seedRoadmap: TourRoadmap = {
   id: 'default',
   updatedAt: seedTimestamp,
   phases: [
-    { id: 'phase-foundation', title: 'Foundation', months: 'Months 1-3', order: 1, focus: ['build consistency', 'core/back durability', 'hip/glute strength', 'mobility habit', 'easy rides and walks'] },
-    { id: 'phase-hill-strength', title: 'Hill Strength', months: 'Months 4-6', order: 2, focus: ['step-ups', 'split squats', 'loaded carries', 'low-cadence hill riding', 'longer weekend rides'] },
-    { id: 'phase-loaded-gravel', title: 'Loaded Gravel Conditioning', months: 'Months 7-9', order: 3, focus: ['longer rides', 'back-to-back ride days', 'practice with bags/trailer/load', 'Harrisonburg hill routes', 'recovery routines'] },
+    { id: 'phase-foundation', title: 'Base', months: 'Months 1-3', order: 1, focus: ['build consistency', 'core/back durability', 'hip/glute strength', 'mobility habit', 'easy rides and walks'] },
+    { id: 'phase-hill-strength', title: 'Build + Hill Support', months: 'Months 4-6', order: 2, focus: ['step-ups', 'split squats', 'loaded carries', 'low-cadence hill riding', 'longer weekend rides'] },
+    { id: 'phase-loaded-gravel', title: 'Tour Specificity', months: 'Months 7-9', order: 3, focus: ['longer rides', 'back-to-back ride days', 'bags/trailer/load practice', 'Harrisonburg hill routes', 'recovery routines'] },
     { id: 'phase-tour-simulation', title: 'Tour Simulation', months: 'Months 10-11', order: 4, focus: ['multi-hour rides', 'back-to-back long days', 'loaded climbs', 'nutrition/hydration notes', 'soreness tracking'] },
-    { id: 'phase-taper', title: 'Taper and Maintenance', months: 'Month 12', order: 5, focus: ['reduce volume', 'preserve mobility and core', 'short sharp hill efforts', 'bike fit/equipment checklist'] },
+    { id: 'phase-taper', title: 'Taper / Departure Prep', months: 'Month 12', order: 5, focus: ['reduce volume', 'preserve mobility and core', 'short sharp hill efforts', 'bike fit/equipment checklist'] },
   ],
   milestones: [
     { id: 'mile-foundation-1', phaseId: 'phase-foundation', title: 'Complete 3 consistent weeks', description: 'Hit the planned weekly frequency without forcing missed days.', targetMonth: 1, order: 1, completed: false },
