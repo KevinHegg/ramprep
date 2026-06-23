@@ -29,6 +29,12 @@
   margin: 0 auto 16px;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .brand-lockup {
   display: flex;
   align-items: center;
@@ -143,6 +149,16 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
+}
+
+.carb-summary-card {
+  display: grid;
+  gap: 12px;
+}
+
+.carb-summary-card .ghost-button,
+.quick-carb-card .primary-button {
+  margin-top: 2px;
 }
 
 .metric-value {
@@ -833,6 +849,215 @@ label > span,
   background: var(--surface-3);
 }
 
+.carb-page {
+  align-items: start;
+}
+
+.carb-hero,
+.quick-carb-card,
+.meal-breakdown-card,
+.lookup-card,
+.preset-card,
+.carb-reports-card {
+  display: grid;
+  gap: 12px;
+}
+
+.date-pill {
+  min-width: 142px;
+}
+
+.date-pill span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.date-pill input {
+  min-height: 38px;
+  padding: 7px 9px;
+}
+
+.meal-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.meal-slot-grid button,
+.lookup-results button {
+  min-height: 48px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-strong);
+  background: var(--surface);
+  font-weight: 850;
+}
+
+.meal-slot-grid button.active {
+  border-color: var(--accent);
+  color: white;
+  background: var(--accent);
+}
+
+.meal-section-list,
+.lookup-results,
+.lookup-detail,
+.preset-list,
+.report-list {
+  display: grid;
+  gap: 10px;
+}
+
+.meal-section {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.meal-section summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 0 12px;
+  color: var(--text-strong);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.meal-section > .text-icon-button,
+.meal-section > .stack,
+.meal-section > .empty-state {
+  margin: 0 10px 10px;
+}
+
+.carb-entry-row,
+.preset-row,
+.report-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 54px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.carb-entry-row p,
+.preset-row p,
+.report-row p,
+.lookup-detail p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.carb-entry-edit {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.lookup-results button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  text-align: left;
+}
+
+.lookup-results span,
+.preset-row > div:first-child,
+.carb-entry-row > div:first-child,
+.report-row > div:first-child {
+  min-width: 0;
+}
+
+.lookup-results small,
+.report-tile small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.lookup-results b {
+  white-space: nowrap;
+}
+
+.lookup-detail {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.lookup-detail h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 18px;
+}
+
+.report-tile {
+  display: grid;
+  gap: 2px;
+  min-height: 76px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.report-tile strong {
+  color: var(--text-strong);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.stacked-meal-bar {
+  display: flex;
+  overflow: hidden;
+  min-height: 18px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.stacked-meal-bar span {
+  min-width: 3px;
+  background: var(--accent);
+}
+
+.stacked-meal-bar span:nth-child(2) {
+  background: var(--accent-2);
+}
+
+.stacked-meal-bar span:nth-child(3) {
+  background: var(--accent-3);
+}
+
+.stacked-meal-bar span:nth-child(4) {
+  background: color-mix(in srgb, var(--accent) 65%, var(--accent-2));
+}
+
+.stacked-meal-bar span:nth-child(5) {
+  background: color-mix(in srgb, var(--accent-2) 70%, var(--accent-3));
+}
+
+.stacked-meal-bar span:nth-child(6) {
+  background: color-mix(in srgb, var(--accent-3) 65%, var(--accent));
+}
+
+.mini-report-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .sheet-backdrop {
   position: fixed;
   z-index: 40;
@@ -1061,6 +1286,11 @@ label > span,
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .meal-slot-grid,
+  .mini-report-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .day-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -1082,6 +1312,10 @@ label > span,
   .library-grid,
   .routine-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .carb-reports-card {
+    grid-column: 1 / -1;
   }
 
   .bottom-nav {

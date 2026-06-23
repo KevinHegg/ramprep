@@ -26,6 +26,15 @@ export type SkipReason =
   | 'no time'
   | 'other'
 export type Units = 'lb' | 'kg'
+export type CarbMealSlot =
+  | 'breakfast'
+  | 'morningSnack'
+  | 'lunch'
+  | 'afternoonSnack'
+  | 'dinner'
+  | 'eveningSnack'
+export type CarbSourceType = 'manual' | 'preset' | 'usda' | 'openFoodFacts'
+export type PreferredNutritionSource = 'manual' | 'usda' | 'openFoodFacts'
 
 export interface ExerciseDefaults {
   sets?: number
@@ -149,6 +158,58 @@ export interface UserSettings {
   updatedAt: string
 }
 
+export interface CarbEntry {
+  id: ID
+  dateISO: string
+  mealSlot: CarbMealSlot
+  netCarbs: number
+  sourceType: CarbSourceType
+  sourceLabel?: string
+  savedFoodName?: string
+  goalGramsAtEntry: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CarbSettings {
+  id: 'default'
+  dailyNetCarbGoalGrams: number
+  saveFoodNamesInLog: boolean
+  subtractSugarAlcoholsWhenAvailable: boolean
+  foodDataCentralApiKey?: string
+  preferredNutritionSource: PreferredNutritionSource
+  updatedAt: string
+}
+
+export interface CarbGoalHistory {
+  id: ID
+  effectiveDateISO: string
+  goalGrams: number
+  createdAt: string
+}
+
+export interface CarbPreset {
+  id: ID
+  name: string
+  netCarbs: number
+  servingDescription?: string
+  sourceType?: CarbSourceType
+  sourceId?: string
+  useCount: number
+  lastUsedAt?: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface FoodLookupCache {
+  id: ID
+  source: 'usda' | 'openFoodFacts'
+  queryOrSourceId: string
+  resultJson: string
+  cachedAt: string
+  expiresAt: string
+}
+
 export interface Equipment {
   id: ID
   name: string
@@ -256,6 +317,11 @@ export interface AppData {
   settings: UserSettings
   equipment: Equipment[]
   schedule: SchedulePreference
+  carbEntries: CarbEntry[]
+  carbSettings: CarbSettings
+  carbGoalHistory: CarbGoalHistory[]
+  carbPresets: CarbPreset[]
+  foodLookupCache: FoodLookupCache[]
 }
 
 export interface WorkoutDraftEntry {
