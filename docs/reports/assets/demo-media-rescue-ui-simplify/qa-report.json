@@ -1,0 +1,83 @@
+{
+  "reports": [
+    {
+      "label": "Today",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "offenders": [],
+      "heading": "Today"
+    },
+    {
+      "label": "More",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "offenders": [],
+      "heading": "More"
+    },
+    {
+      "label": "Library",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "offenders": [],
+      "heading": "Workouts"
+    },
+    {
+      "label": "Downward Dog Demo",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "offenders": [],
+      "heading": "Workouts"
+    },
+    {
+      "label": "90/90 Demo",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "offenders": [],
+      "heading": "Workouts"
+    },
+    {
+      "label": "Log",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "offenders": [],
+      "heading": "Workout Log"
+    },
+    {
+      "label": "Carbs",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "offenders": [],
+      "heading": "Net Carbs"
+    },
+    {
+      "label": "Progress",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "documentScrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "offenders": [],
+      "heading": "Progress"
+    }
+  ],
+  "sticky": {
+    "headerTop": 0,
+    "footerBottom": 844,
+    "backWidth": 91.578125,
+    "backHeight": 44,
+    "innerHeight": 844
+  }
+}
