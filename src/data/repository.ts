@@ -136,16 +136,40 @@ export const ensureV11Seeds = async () => {
       const missingMedia = seedExerciseMedia.filter((item) => !mediaIds.has(item.id))
 
       if (missingExercises.length) {
-        await db.exercises.bulkAdd(missingExercises)
+        await db.exercises.bulkPut(missingExercises)
+      }
+      const seededExerciseById = new Map(seedExercises.map((item) => [item.id, item]))
+      const instructionUpdates = existingExercises
+        .map((exercise) => {
+          const seededExercise = seededExerciseById.get(exercise.id)
+          const hasOldGenericInstruction = exercise.instructions.some((step) =>
+            step.toLowerCase().startsWith(`set up for ${exercise.name.toLowerCase()}`),
+          )
+
+          return seededExercise && hasOldGenericInstruction
+            ? {
+                ...exercise,
+                description: seededExercise.description,
+                instructions: seededExercise.instructions,
+                formCues: seededExercise.formCues,
+                commonMistakes: seededExercise.commonMistakes,
+                updatedAt: nowIso(),
+              }
+            : null
+        })
+        .filter((exercise): exercise is Exercise => Boolean(exercise))
+
+      if (instructionUpdates.length) {
+        await db.exercises.bulkPut(instructionUpdates)
       }
       if (missingRoutines.length) {
-        await db.routines.bulkAdd(missingRoutines)
+        await db.routines.bulkPut(missingRoutines)
       }
       if (missingRoutineExercises.length) {
-        await db.routineExercises.bulkAdd(missingRoutineExercises)
+        await db.routineExercises.bulkPut(missingRoutineExercises)
       }
       if (missingMedia.length) {
-        await db.exerciseMedia.bulkAdd(missingMedia)
+        await db.exerciseMedia.bulkPut(missingMedia)
       }
       if (!existingRoadmap) {
         await db.tourRoadmaps.add({ ...seedRoadmap, updatedAt: nowIso() })

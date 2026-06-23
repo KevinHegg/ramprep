@@ -54,6 +54,145 @@ interface ExerciseSeed {
   attribution?: string
 }
 
+interface ExerciseGuidance {
+  instructions: string[]
+  formCues: string[]
+  commonMistakes: string[]
+}
+
+const quickExerciseGuidance = (
+  id: string,
+  group: ExerciseGroup,
+  equipment: EquipmentKind[],
+  bikeTourPurpose: BikeTourPurpose[],
+): ExerciseGuidance => {
+  if (id === 'downward-dog') {
+    return {
+      instructions: [
+        'Start on hands and knees with hands slightly forward of shoulders.',
+        'Tuck toes, lift hips up and back, and make an inverted V shape.',
+        'Bend knees as needed so the spine can lengthen before chasing straight legs.',
+        'Press the floor away, breathe slowly, and alternate gentle heel drops if calves are tight.',
+      ],
+      formCues: ['Long spine first', 'Hands spread wide', 'Shoulders away from ears', 'Knees may stay bent'],
+      commonMistakes: ['Forcing heels down', 'Rounding the upper back', 'Shrugging into the neck', 'Holding breath'],
+    }
+  }
+
+  if (id.includes('trailer') || id.includes('burley') || bikeTourPurpose.includes('trailer handling')) {
+    return {
+      instructions: [
+        'Start with an easy route, low speed, and a quick equipment and comfort check.',
+        'Practice smooth starts, wide turns, gentle braking, and stopping before adding distance.',
+        'Keep effort conversational and stop early if handling, traffic, heat, or dog comfort changes.',
+      ],
+      formCues: ['Smooth steering', 'Extra braking distance', 'Quiet upper body', 'Comfort checks first'],
+      commonMistakes: ['Riding too fast too soon', 'Turning sharply', 'Skipping comfort checks', 'Adding hills before handling is easy'],
+    }
+  }
+
+  if (group === 'Bike and Outdoor Conditioning') {
+    return {
+      instructions: [
+        'Warm up easily before adding distance, grade, or effort.',
+        'Settle into a smooth pace you could repeat tomorrow.',
+        'Finish with a few easy minutes and note comfort, fueling, and soreness.',
+      ],
+      formCues: ['Quiet shoulders', 'Steady breathing', 'Even pedal stroke or stride', 'Finish with control'],
+      commonMistakes: ['Starting too hard', 'Ignoring comfort signals', 'Turning every ride into a test', 'Skipping cooldown notes'],
+    }
+  }
+
+  if (group === 'Mobility and Yoga') {
+    return {
+      instructions: [
+        'Move into a comfortable stretch or mobility position without forcing end range.',
+        'Breathe slowly and let the target area relax before increasing range.',
+        'Ease out of the position gradually and repeat on the other side when needed.',
+      ],
+      formCues: ['Slow nasal breaths', 'No pinching', 'Gentle pressure', 'Control the exit'],
+      commonMistakes: ['Bouncing', 'Chasing pain', 'Holding the breath', 'Letting joints collapse'],
+    }
+  }
+
+  if (group === 'Core') {
+    return {
+      instructions: [
+        'Set ribs down, pelvis neutral, and brace as if preparing for a gentle cough.',
+        'Move slowly while keeping the trunk quiet and breathing behind the brace.',
+        'Stop the set when the low back, hips, or shoulders start compensating.',
+      ],
+      formCues: ['Ribs stacked over pelvis', 'Slow exhale', 'No low-back arch', 'Small clean range'],
+      commonMistakes: ['Moving too fast', 'Holding breath', 'Letting the back arch', 'Continuing after control is gone'],
+    }
+  }
+
+  if (group === 'Back and Posture') {
+    const banded = equipment.includes('band')
+    return {
+      instructions: banded
+        ? [
+            'Anchor or hold the band so resistance is light enough to move cleanly.',
+            'Start with ribs down and neck relaxed, then move from the shoulder blades.',
+            'Pause briefly at the strongest position and return slowly.',
+          ]
+        : [
+            'Set the chest, ribs, and hips so the torso stays quiet.',
+            'Pull by moving the shoulder blade and elbow, not by shrugging.',
+            'Pause briefly, then lower with control through the full range.',
+          ],
+      formCues: ['Neck relaxed', 'Shoulder blades move first', 'Ribs down', 'Slow return'],
+      commonMistakes: ['Shrugging', 'Arching the back', 'Using momentum', 'Cutting the range short'],
+    }
+  }
+
+  if (group === 'Legs and Hill Climbing') {
+    return {
+      instructions: [
+        'Set the working foot firmly and find balance before starting the rep.',
+        'Lower or rise under control while the knee tracks over the middle toes.',
+        'Use a range that keeps hips level and pressure through the whole foot.',
+      ],
+      formCues: ['Whole foot heavy', 'Knee tracks toes', 'Level hips', 'Quiet tempo'],
+      commonMistakes: ['Knee collapsing inward', 'Pushing only through toes', 'Rushing the lower', 'Using more load than control allows'],
+    }
+  }
+
+  if (group === 'Hinge and Posterior Chain') {
+    return {
+      instructions: [
+        'Brace, soften the knees, and send hips back as if closing a car door.',
+        'Keep the load close and stop the descent before the spine rounds.',
+        'Drive the floor away and finish tall without leaning back.',
+      ],
+      formCues: ['Hips move back', 'Long spine', 'Load stays close', 'Glutes finish the rep'],
+      commonMistakes: ['Squatting the hinge', 'Reaching load forward', 'Rounding low back', 'Overextending at the top'],
+    }
+  }
+
+  if (group === 'Carries and Loaded Conditioning') {
+    return {
+      instructions: [
+        'Pick up the load with a hinge and stand tall before walking.',
+        'Take slow, quiet steps while keeping ribs stacked and shoulders level.',
+        'Set the load down with control before grip or posture breaks.',
+      ],
+      formCues: ['Tall posture', 'Quiet steps', 'Shoulders level', 'Brace before moving'],
+      commonMistakes: ['Rushing', 'Leaning away from the load', 'Shrugging', 'Dropping the load carelessly'],
+    }
+  }
+
+  return {
+    instructions: [
+      'Set up in a stable position and choose a range you can control.',
+      'Move slowly enough that breathing, posture, and joint position stay steady.',
+      'Stop the set when form changes or discomfort appears.',
+    ],
+    formCues: ['Move deliberately', 'Keep joints stacked', 'Use a controlled range', 'Leave 1-2 reps in reserve'],
+    commonMistakes: ['Rushing reps', 'Chasing range before control', 'Holding breath', 'Ignoring soreness signals'],
+  }
+}
+
 const makeExercise = (seed: ExerciseSeed, index: number): Exercise => {
   const colors = [
     ['#214e5f', '#8bd3c7'],
@@ -545,24 +684,24 @@ const quickExercise = (
   defaults: ExerciseDefaults,
   bikeTourPurpose: BikeTourPurpose[],
   description: string,
-): ExerciseSeed => ({
-  id,
-  name,
-  group,
-  equipment,
-  targetAreas,
-  defaults,
-  bikeTourPurpose,
-  difficulty: 'beginner',
-  description,
-  instructions: [
-    `Set up for ${name} with a stable, comfortable position.`,
-    'Brace lightly, move through a controlled range, and keep breathing.',
-    'Stop the set when form changes or discomfort appears.',
-  ],
-  formCues: ['Move deliberately', 'Keep joints stacked', 'Use a range you can control', 'Leave 1-2 reps in reserve'],
-  commonMistakes: ['Rushing reps', 'Chasing range before control', 'Holding breath', 'Ignoring soreness signals'],
-})
+): ExerciseSeed => {
+  const guidance = quickExerciseGuidance(id, group, equipment, bikeTourPurpose)
+
+  return {
+    id,
+    name,
+    group,
+    equipment,
+    targetAreas,
+    defaults,
+    bikeTourPurpose,
+    difficulty: 'beginner',
+    description,
+    instructions: guidance.instructions,
+    formCues: guidance.formCues,
+    commonMistakes: guidance.commonMistakes,
+  }
+}
 
 const extraExerciseSeeds: ExerciseSeed[] = [
   quickExercise('front-plank', 'front plank', 'Core', ['bodyweight', 'yoga mat'], ['core', 'shoulders'], { sets: 3, durationSeconds: 30 }, ['anti-extension'], 'Anti-extension core endurance for long seated climbs.'),

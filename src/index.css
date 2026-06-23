@@ -103,18 +103,28 @@
 
 * {
   box-sizing: border-box;
+  min-width: 0;
 }
 
 html {
   min-width: 320px;
+  max-width: 100%;
+  overflow-x: hidden;
   background: var(--bg);
 }
 
 body {
   margin: 0;
   min-width: 320px;
+  max-width: 100%;
   min-height: 100svh;
+  overflow-x: hidden;
   background: var(--bg);
+}
+
+#root {
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 button,

@@ -125,7 +125,7 @@ const navItems: Array<{ page: Page; label: string; icon: typeof Activity }> = [
   { page: 'dashboard', label: 'Dashboard', icon: Activity },
   { page: 'workouts', label: 'Workouts', icon: Dumbbell },
   { page: 'log', label: 'Log', icon: ClipboardList },
-  { page: 'carbs', label: 'Carbs', icon: Flame },
+  { page: 'carbs', label: 'Net Carbs', icon: Flame },
   { page: 'progress', label: 'Progress', icon: BarChart3 },
 ]
 
@@ -384,20 +384,133 @@ const EffortPicker = ({ value, onChange }: { value?: number; onChange: (value: n
   </div>
 )
 
-const ExerciseMotion = ({ exercise }: { exercise: Exercise }) => (
-  <div className="motion-card" aria-hidden="true">
-    <svg viewBox="0 0 180 110">
-      <title>{exercise.name} offline animation</title>
-      <rect width="180" height="110" rx="12" />
-      <circle className="motion-head" cx="72" cy="34" r="10" />
-      <path className="motion-spine" d="M74 46 C84 56 98 62 118 70" />
-      <path className="motion-arm" d="M88 55 L52 74" />
-      <path className="motion-leg" d="M112 71 L138 88" />
-      <path className="motion-leg two" d="M106 70 L78 90" />
-      <path className="motion-load" d="M44 78 H66" />
-    </svg>
-  </div>
-)
+type ExerciseMotionKind = 'mobility' | 'core' | 'hinge' | 'single-leg' | 'pull' | 'carry' | 'bike'
+
+const getExerciseMotionKind = (exercise: Exercise): ExerciseMotionKind => {
+  const category = getExerciseCategory(exercise)
+  const text = `${exercise.id} ${exercise.name} ${category}`.toLowerCase()
+
+  if (/bike|ride|spin|trailer|burley|tour|tow/.test(text)) {
+    return 'bike'
+  }
+  if (/carry|walk|hike|conditioning/.test(text)) {
+    return 'carry'
+  }
+  if (/row|pull|face pull|external rotation|upper-back|posture/.test(text)) {
+    return 'pull'
+  }
+  if (/step|split|lunge|calf|wall sit|single-leg/.test(text)) {
+    return 'single-leg'
+  }
+  if (/hinge|deadlift|swing|bridge|glute|hamstring|posterior/.test(text)) {
+    return 'hinge'
+  }
+  if (/dead bug|bird dog|plank|pallof|hollow|curl-up|bear crawl|anti-rotation|anti-extension|core/.test(text)) {
+    return 'core'
+  }
+
+  return 'mobility'
+}
+
+const MotionGuide = ({ kind }: { kind: ExerciseMotionKind }) => {
+  if (kind === 'bike') {
+    return (
+      <g className="motion-bike">
+        <circle className="motion-wheel" cx="46" cy="78" r="18" />
+        <circle className="motion-wheel two" cx="116" cy="78" r="18" />
+        <path className="motion-frame" d="M46 78 L72 50 L92 78 L116 78 L88 50 L72 50" />
+        <circle className="motion-head" cx="88" cy="31" r="8" />
+        <path className="motion-person" d="M86 40 L76 55 L92 58 L112 66" />
+        <path className="motion-person two" d="M77 55 L60 72 M92 58 L82 78" />
+        <path className="motion-load" d="M132 80 h24 v-18 h-24 z M116 78 L132 72" />
+      </g>
+    )
+  }
+
+  if (kind === 'carry') {
+    return (
+      <g className="motion-carry">
+        <circle className="motion-head" cx="82" cy="28" r="9" />
+        <path className="motion-person" d="M82 39 L82 66 M82 49 L61 56 M83 50 L105 56" />
+        <path className="motion-person two" d="M82 66 L68 91 M84 66 L101 91" />
+        <path className="motion-load" d="M47 61 h18 v22 h-18 z M103 61 h18 v22 h-18 z" />
+        <path className="motion-ground" d="M38 95 H140" />
+      </g>
+    )
+  }
+
+  if (kind === 'pull') {
+    return (
+      <g className="motion-pull">
+        <path className="motion-band" d="M30 48 C72 35 96 35 142 48" />
+        <circle className="motion-head" cx="86" cy="27" r="9" />
+        <path className="motion-person" d="M86 38 L86 66 M85 48 L60 50 M87 48 L113 50" />
+        <path className="motion-person two" d="M86 66 L73 91 M88 66 L101 91" />
+        <path className="motion-ground" d="M50 95 H124" />
+      </g>
+    )
+  }
+
+  if (kind === 'single-leg') {
+    return (
+      <g className="motion-step">
+        <path className="motion-box" d="M92 80 h42 v18 H92 z" />
+        <circle className="motion-head" cx="79" cy="27" r="9" />
+        <path className="motion-person" d="M80 38 L82 63 M81 49 L62 60 M82 49 L101 60" />
+        <path className="motion-person two" d="M82 63 L65 91 M83 63 L108 82" />
+        <path className="motion-ground" d="M39 98 H146" />
+      </g>
+    )
+  }
+
+  if (kind === 'hinge') {
+    return (
+      <g className="motion-hinge">
+        <circle className="motion-head" cx="74" cy="30" r="9" />
+        <path className="motion-person" d="M75 42 C88 48 98 56 111 71" />
+        <path className="motion-person two" d="M86 51 L55 72 M108 70 L132 91 M104 70 L79 91" />
+        <path className="motion-load" d="M48 72 h18 v18 h-18 z" />
+        <path className="motion-ground" d="M37 94 H145" />
+      </g>
+    )
+  }
+
+  if (kind === 'core') {
+    return (
+      <g className="motion-core">
+        <path className="motion-mat" d="M34 86 H146" />
+        <circle className="motion-head" cx="72" cy="49" r="9" />
+        <path className="motion-person" d="M83 56 L111 66 M85 58 L58 73" />
+        <path className="motion-person two" d="M90 61 L126 38 M72 61 L48 38" />
+        <path className="motion-ground" d="M42 92 H138" />
+      </g>
+    )
+  }
+
+  return (
+    <g className="motion-mobility">
+      <path className="motion-mat" d="M34 91 H146" />
+      <circle className="motion-head" cx="72" cy="68" r="8" />
+      <path className="motion-person" d="M43 86 L74 58 L118 86" />
+      <path className="motion-person two" d="M74 58 L87 86 M58 73 L43 86 M102 74 L118 86" />
+      <path className="motion-breath" d="M126 35 C139 31 147 38 150 49" />
+    </g>
+  )
+}
+
+const ExerciseMotion = ({ exercise }: { exercise: Exercise }) => {
+  const kind = getExerciseMotionKind(exercise)
+
+  return (
+    <div className={`motion-card motion-${kind}`} aria-hidden="true">
+      <svg viewBox="0 0 180 110">
+        <title>{exercise.name} animated how-to guide</title>
+        <rect width="180" height="110" rx="12" />
+        <MotionGuide kind={kind} />
+      </svg>
+    </div>
+  )
+}
 
 const LogoMark = () => (
   <span className="brand-mark" aria-hidden="true">
@@ -873,7 +986,7 @@ function App() {
   }
 
   const handleExportCarbCsv = async () => {
-    downloadText(`ramprep-carb-entries-${new Date().toISOString().slice(0, 10)}.csv`, await exportCarbEntriesCsv(), 'text/csv')
+    downloadText(`ramprep-net-carb-entries-${new Date().toISOString().slice(0, 10)}.csv`, await exportCarbEntriesCsv(), 'text/csv')
   }
 
   const goalForSelectedCarbDate = () =>
@@ -924,7 +1037,7 @@ function App() {
     await updateCarbEntry({ ...carbEditEntry, netCarbs: normalizeCarbGrams(carbEditEntry.netCarbs) })
     setCarbEditEntry(null)
     await refresh()
-    showFlash('Carb entry updated.')
+    showFlash('Net carb entry updated.')
   }
 
   const handleSaveCarbSettings = async () => {
@@ -934,7 +1047,7 @@ function App() {
 
     await saveCarbSettings(carbSettingsDraft)
     await refresh()
-    showFlash('Carb settings saved.')
+    showFlash('Net carb settings saved.')
   }
 
   const handlePresetSave = async () => {
@@ -953,7 +1066,7 @@ function App() {
     })
     setPresetDraft({ id: '', name: '', netCarbs: 0, servingDescription: '' })
     await refresh()
-    showFlash('Carb preset saved.')
+    showFlash('Net carb preset saved.')
   }
 
   const handleUsePreset = async (preset: AppData['carbPresets'][number]) => {
@@ -1035,7 +1148,7 @@ function App() {
       sourceLabel: lookupSelected.attribution,
       savedFoodName: lookupSelected.name,
     })
-    showFlash('Lookup carbs added.')
+    showFlash('Lookup net carbs added.')
   }
 
   const handleSaveLookupPreset = async () => {
@@ -1150,7 +1263,7 @@ function App() {
               {page === 'dashboard' && 'Today'}
               {page === 'workouts' && 'Workouts'}
               {page === 'log' && 'Workout Log'}
-              {page === 'carbs' && 'Carbs'}
+              {page === 'carbs' && 'Net Carbs'}
               {page === 'progress' && 'Progress'}
               {page === 'settings' && 'Settings'}
               {page === 'roadmap' && 'Tour Roadmap'}
@@ -1231,7 +1344,7 @@ function App() {
               }}
             >
               <Plus aria-hidden="true" size={18} />
-              Add carbs
+              Add net carbs
             </button>
           </Card>
 
@@ -2287,17 +2400,17 @@ function App() {
                                   </p>
                                 </div>
                                 <div className="toolbar">
-                                  <button className="icon-button" type="button" aria-label="Edit carb entry" onClick={() => setCarbEditEntry(entry)}>
+                                  <button className="icon-button" type="button" aria-label="Edit net carb entry" onClick={() => setCarbEditEntry(entry)}>
                                     <Pencil aria-hidden="true" size={18} />
                                   </button>
                                   <button
                                     className="icon-button danger"
                                     type="button"
-                                    aria-label="Delete carb entry"
+                                    aria-label="Delete net carb entry"
                                     onClick={async () => {
                                       await deleteCarbEntry(entry.id)
                                       await refresh()
-                                      showFlash('Carb entry deleted.')
+                showFlash('Net carb entry deleted.')
                                     }}
                                   >
                                     <Trash2 aria-hidden="true" size={18} />
@@ -2404,7 +2517,7 @@ function App() {
             <div className="section-title">
               <div>
                 <p className="eyebrow">Shortcuts</p>
-                <h2>Carb presets</h2>
+                <h2>Net carb presets</h2>
               </div>
             </div>
             <div className="form-grid">
@@ -2873,9 +2986,9 @@ function App() {
             <div className="section-title">
               <div>
                 <p className="eyebrow">Private local settings</p>
-                <h2>Carb Settings</h2>
+                <h2>Net Carb Settings</h2>
               </div>
-              <button className="icon-button" type="button" aria-label="Save carb settings" onClick={() => void handleSaveCarbSettings()}>
+              <button className="icon-button" type="button" aria-label="Save net carb settings" onClick={() => void handleSaveCarbSettings()}>
                 <Save aria-hidden="true" size={18} />
               </button>
             </div>
@@ -2891,7 +3004,7 @@ function App() {
             />
             <div className="form-grid">
               <label>
-                Save food names in carb log
+                Save food names in net carb log
                 <span className="inline-check">
                   <input
                     checked={carbSettingsDraft.saveFoodNamesInLog}
@@ -2963,21 +3076,21 @@ function App() {
               </button>
               <button className="ghost-button" type="button" onClick={() => void handleExportCarbCsv()}>
                 <Download aria-hidden="true" size={18} />
-                Carb CSV
+                Net Carb CSV
               </button>
               <button
                 className="danger-button"
                 type="button"
                 onClick={async () => {
-                  if (window.confirm('Delete all carb entries? Presets and workout data stay intact.')) {
+                  if (window.confirm('Delete all net carb entries? Presets and workout data stay intact.')) {
                     await deleteAllCarbEntries()
                     await refresh()
-                    showFlash('Carb entries deleted.')
+                    showFlash('Net carb entries deleted.')
                   }
                 }}
               >
                 <Trash2 aria-hidden="true" size={18} />
-                Delete carbs
+                Delete net carbs
               </button>
             </div>
           </Card>
@@ -3188,7 +3301,7 @@ function App() {
               </button>
               <button className="ghost-button" type="button" onClick={() => void handleExportCarbCsv()}>
                 <Download aria-hidden="true" size={18} />
-                Carb CSV
+                Net Carb CSV
               </button>
               <label className="file-button">
                 <Upload aria-hidden="true" size={18} />

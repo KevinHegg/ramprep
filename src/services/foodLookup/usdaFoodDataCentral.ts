@@ -104,7 +104,7 @@ export const searchUsdaFoods = async (query: string, options: FoodLookupOptions)
     return []
   }
   if (!options.apiKey?.trim()) {
-    throw new FoodLookupError('Add your FoodData Central API key in Carb Settings first.')
+    throw new FoodLookupError('Add your FoodData Central API key in Net Carb Settings first.')
   }
 
   const params = new URLSearchParams({
@@ -128,7 +128,7 @@ export const getUsdaFoodDetails = async (
   options: FoodLookupOptions,
 ): Promise<FoodLookupResult | null> => {
   if (!options.apiKey?.trim()) {
-    throw new FoodLookupError('Add your FoodData Central API key in Carb Settings first.')
+    throw new FoodLookupError('Add your FoodData Central API key in Net Carb Settings first.')
   }
 
   const params = new URLSearchParams({ api_key: options.apiKey.trim() })

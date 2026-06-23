@@ -1,4 +1,7 @@
 .app-shell {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
   min-height: 100svh;
   padding: 16px 14px calc(92px + env(safe-area-inset-bottom));
   color: var(--text);
@@ -25,12 +28,14 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
   max-width: 1120px;
   margin: 0 auto 16px;
 }
 
 .topbar-actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
 }
@@ -39,6 +44,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -75,6 +81,7 @@
 
 .topbar h1 {
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--text-strong);
   font-size: 34px;
   line-height: 1.05;
@@ -105,14 +112,21 @@
   white-space: nowrap;
 }
 
+.status-pill {
+  flex: 0 1 auto;
+}
+
 .page-grid {
   display: grid;
   gap: 12px;
+  width: 100%;
   max-width: 1120px;
   margin: 0 auto;
 }
 
 .card {
+  min-width: 0;
+  max-width: 100%;
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -195,6 +209,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
 .section-title {
@@ -205,6 +220,7 @@
 .card h2,
 .temporary-form h3 {
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--text-strong);
   font-size: 20px;
   line-height: 1.15;
@@ -213,7 +229,16 @@
 .card p,
 .card small,
 .empty-state {
+  overflow-wrap: anywhere;
   color: var(--muted);
+}
+
+.card strong,
+.card label,
+.card span,
+.notice,
+.toast {
+  overflow-wrap: anywhere;
 }
 
 .stack,
@@ -360,6 +385,10 @@ button:disabled {
   min-height: 44px;
   border-radius: 8px;
   font-weight: 850;
+  line-height: 1.15;
+  max-width: 100%;
+  text-align: center;
+  white-space: normal;
 }
 
 .primary-button {
@@ -471,6 +500,7 @@ select,
 textarea {
   min-height: 44px;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -562,7 +592,7 @@ label > span,
 
 .exercise-card {
   display: grid;
-  grid-template-columns: 92px 1fr;
+  grid-template-columns: minmax(74px, 92px) minmax(0, 1fr);
   gap: 12px;
   align-items: start;
 }
@@ -587,14 +617,14 @@ label > span,
 }
 
 .motion-card rect {
-  fill: var(--accent);
+  fill: color-mix(in srgb, var(--accent) 82%, var(--surface));
 }
 
 .motion-card path,
 .motion-card circle {
   fill: none;
   stroke: white;
-  stroke-width: 7;
+  stroke-width: 5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -604,22 +634,48 @@ label > span,
   stroke: none;
 }
 
-.motion-card .motion-arm,
-.motion-card .motion-leg,
-.motion-card .motion-load {
-  animation: motion-pulse 1200ms ease-in-out infinite alternate;
+.motion-card .motion-person,
+.motion-card .motion-frame,
+.motion-card .motion-band,
+.motion-card .motion-breath {
+  animation: motion-guide 1200ms ease-in-out infinite alternate;
+  transform-origin: center;
 }
 
-.motion-card .two {
+.motion-card .two,
+.motion-card .motion-wheel {
   animation-delay: 180ms;
 }
 
-@keyframes motion-pulse {
+.motion-card .motion-load,
+.motion-card .motion-box,
+.motion-card .motion-mat,
+.motion-card .motion-ground {
+  opacity: 0.88;
+}
+
+.motion-card .motion-wheel {
+  animation: wheel-spin 1000ms linear infinite;
+  transform-origin: center;
+}
+
+@keyframes motion-guide {
   from {
-    transform: translateY(0);
+    transform: translate(0, 0) rotate(0deg);
   }
   to {
-    transform: translateY(-7px);
+    transform: translate(3px, -4px) rotate(-1.5deg);
+  }
+}
+
+@keyframes wheel-spin {
+  from {
+    stroke-dasharray: 4 6;
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dasharray: 4 6;
+    stroke-dashoffset: 20;
   }
 }
 
@@ -810,10 +866,9 @@ label > span,
 
 .category-chip-row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
   padding: 12px 0 2px;
-  scroll-snap-type: x proximity;
 }
 
 .category-chip-row button {
@@ -826,7 +881,6 @@ label > span,
   background: var(--surface);
   font-size: 12px;
   font-weight: 850;
-  scroll-snap-align: start;
 }
 
 .category-chip-row button.active {
@@ -864,7 +918,8 @@ label > span,
 }
 
 .date-pill {
-  min-width: 142px;
+  width: min(142px, 100%);
+  min-width: 0;
 }
 
 .date-pill span {
@@ -945,6 +1000,11 @@ label > span,
   background: var(--surface);
 }
 
+.carb-entry-row,
+.preset-row {
+  flex-wrap: wrap;
+}
+
 .carb-entry-row p,
 .preset-row p,
 .report-row p,
@@ -987,6 +1047,7 @@ label > span,
 }
 
 .lookup-results b {
+  flex: 0 0 auto;
   white-space: nowrap;
 }
 
@@ -1173,7 +1234,7 @@ label > span,
 
 .bar-row {
   display: grid;
-  grid-template-columns: minmax(80px, 1fr) 2fr minmax(36px, auto);
+  grid-template-columns: minmax(52px, 1fr) minmax(72px, 2fr) minmax(30px, auto);
   align-items: center;
   gap: 10px;
 }
@@ -1241,8 +1302,10 @@ label > span,
   border-radius: 8px;
   color: var(--muted);
   background: transparent;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .bottom-nav button.active {
