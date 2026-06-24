@@ -1,12 +1,21 @@
 # RampRep
 
-Mobile-first, local-first workout tracking for home strength, mobility, conditioning, and long-distance bike tour preparation.
+Sweaty-thumb training, ride logging, and net-carb tracking for Ride Across America Preparation.
+
+RampRep means RAM Prep: a calm bike-tour preparation app for one private rider. The v1.2 interface is designed for an iPhone outdoors, with large text, giant primary buttons, one-exercise workout mode, a dedicated Ride screen, and a fast net-carb logger.
+
+## Brand
+
+- Identity: RampRep / Ride Across America Preparation
+- Logo: bike wheel, road line, and subtle ram-horn curve in `public/ramrep-logo.svg`
+- Icon assets: `public/favicon.svg`, `public/apple-touch-icon.svg`, and `public/pwa-icon.svg`
+- Palette: deep fjord blue, warm road clay, off-white paper, and pine green
 
 ## Stack
 
 - Vite + React + TypeScript
 - Dexie + IndexedDB persistent storage
-- PWA manifest and service worker for install/offline support
+- PWA manifest and versioned service worker for install support
 - Plain CSS with light/dark theme support
 - Vitest sample utility tests
 
@@ -74,16 +83,18 @@ The build artifact root is `dist/`, and `public/.nojekyll` is copied into it.
 
 The app stores workout data locally in IndexedDB, so use Settings -> Backup to export JSON before changing devices or clearing browser data.
 
-## Offline And PWA Notes
+## PWA And Cache Notes
 
-RampRep registers a service worker from `/ramprep/sw.js` in production and caches the app shell, manifest, and icons. Workout data remains local in IndexedDB. Clearing Safari site data or switching phones can remove local data, so export a JSON backup first.
+RampRep registers a service worker from `/ramprep/sw.js` in production. Offline use is not the priority; the service worker uses a versioned, network-first strategy for app assets and does not cache external videos. The app surfaces an "Update available - refresh" prompt when a new service worker is ready.
+
+Workout logs, net-carb logs, settings, personal defaults, and roadmap data remain in IndexedDB. Settings includes a Clear local app cache action that preserves IndexedDB data. Clearing Safari site data or switching phones can still remove local data, so export a JSON backup first.
 
 ## Data
 
 The first launch seeds:
 
-- Default exercises with instructions, cues, common mistakes, equipment, target areas, defaults, generated SVG-style card art, and attribution.
-- Offline SVG/CSS exercise media records for every seeded exercise.
+- Default exercises with structured instructions, cues, common mistakes, equipment, target areas, source references, and defaults.
+- Verified or needs-review demo source records. RampRep does not show fake SVG demos as primary media.
 - Five default routines:
   - Back + Hinge + Core
   - Legs + Cycling Support
@@ -97,7 +108,7 @@ The first launch seeds:
 
 Seeding only happens when the app has no settings record. User edits are not overwritten. Settings includes a confirmed Reset demo data action.
 
-v1.1 adds migration-safe stores for personal exercise defaults, exercise media, and the tour roadmap. New seed content is added only when missing.
+v1.1 adds migration-safe stores for personal exercise defaults, exercise media, and the tour roadmap. v1.2 adds the sweat-mode UI, Ride screen, curated RampRep library taxonomy, verified source catalog, giant net-carb logger, and versioned cache behavior. New seed content is added only when missing.
 
 ## Backup And Export
 
@@ -117,8 +128,8 @@ The future payload shape is JSON rows containing workout date, routine name, exe
 
 `src/services/wgerAdapter.ts` contains a future-ready adapter for mapping wger exercise metadata into RampRep exercises. The current app works fully offline from seeded local data.
 
-## Media Licensing
+## Media And Source Strategy
 
-The default exercise media is original RampRep SVG/CSS line-art animation and is offline-capable. User-supplied YouTube links are stored only as optional external links; the app does not scrape YouTube or bundle copyrighted video content.
+Exercise demos prioritize verified external pages or official YouTube embeds. RampRep links or embeds; it does not download, cache, scrape, or re-host YouTube videos. If a movement does not have a reviewed source, the demo screen says "Demo needs review" instead of faking motion media.
 
-Future wger imports should copy source, author, license name, license URL, and attribution text into `ExerciseMedia` before showing imported media. If license/source fields are unavailable or unclear, use the built-in offline animation and written instructions instead.
+The curated source list lives in `src/data/verifiedExerciseSources.ts`. Future imports should copy source, author, license name, license URL, and attribution text into `ExerciseMedia` before showing imported media. If license/source fields are unavailable or unclear, mark the item `needsReview`.

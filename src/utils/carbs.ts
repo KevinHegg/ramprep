@@ -19,11 +19,11 @@ export const carbMealSlots: CarbMealSlot[] = [
 
 export const carbMealSlotLabels: Record<CarbMealSlot, string> = {
   breakfast: 'Breakfast',
-  morningSnack: 'Morning Snacks',
+  morningSnack: 'AM Snack',
   lunch: 'Lunch',
-  afternoonSnack: 'Afternoon Snacks',
+  afternoonSnack: 'PM Snack',
   dinner: 'Dinner',
-  eveningSnack: 'Evening Snacks',
+  eveningSnack: 'Evening',
 }
 
 export const carbQuickPicks = [0, 1, 2, 5, 10, 15, 20, 25]

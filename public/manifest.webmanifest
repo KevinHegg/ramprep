@@ -1,7 +1,7 @@
 {
   "name": "RampRep",
   "short_name": "RampRep",
-  "description": "Local-first workout tracking for home strength, mobility, conditioning, and bike tour preparation.",
+  "description": "Sweaty-thumb training, ride logging, and net-carb tracking for Ride Across America Preparation.",
   "start_url": "/ramprep/",
   "scope": "/ramprep/",
   "display": "standalone",
@@ -14,6 +14,12 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/ramprep/apple-touch-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     }
   ]
 }

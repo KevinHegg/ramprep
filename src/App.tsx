@@ -8,7 +8,6 @@ import {
   ChevronDown,
   ChevronUp,
   CircleHelp,
-  ClipboardList,
   Compass,
   Copy,
   Download,
@@ -71,6 +70,12 @@ import {
 import { getExerciseDemoMedia, isVerifiedDemoMedia } from './data/exerciseDemoCatalog'
 import { primaryNavItems } from './data/navigation'
 import {
+  isDefaultLibraryExercise,
+  isSearchOnlyExercise,
+  rampRepGroupForExercise,
+  sweatModeLibraryGroups,
+} from './data/trainingTaxonomy'
+import {
   consistencyByDate,
   exerciseHistory,
   estimatedVolumeByExercise,
@@ -131,17 +136,41 @@ import type {
   WorkoutLog,
 } from './types'
 
-type Page = 'dashboard' | 'workouts' | 'log' | 'carbs' | 'progress' | 'settings' | 'roadmap' | 'more'
+type Page = 'dashboard' | 'train' | 'ride' | 'workouts' | 'log' | 'carbs' | 'progress' | 'settings' | 'roadmap' | 'more'
 type WorkoutsTab = 'routines' | 'library'
 type LogMode = 'recommended' | 'routine' | 'free'
+type ActiveWorkoutStage = 'workout' | 'review'
+type RideTemplate = 'Start ride log' | 'Hill repeats' | 'Burley trailer' | 'Recovery spin'
+type RideSurface = 'pavement' | 'gravel' | 'mixed'
+type RideLoad = 'none' | 'bags' | 'trailer' | 'dog'
 
 const navIconByPage: Record<(typeof primaryNavItems)[number]['page'], typeof Activity> = {
   dashboard: Home,
-  log: ClipboardList,
+  train: Dumbbell,
+  ride: Route,
   carbs: Flame,
-  progress: BarChart3,
   more: Menu,
 }
+
+const appVersion = `${__APP_COMMIT__} · ${new Date(__APP_BUILD_DATE__).toLocaleDateString()}`
+
+const activeWorkoutPrimaryActions = ['Done', '+ Set', 'Skip']
+
+const rideTemplateExerciseId: Record<RideTemplate, string> = {
+  'Start ride log': 'easy-endurance-ride',
+  'Hill repeats': 'hill-repeat-ride',
+  'Burley trailer': 'burley-loaded-trailer-ride',
+  'Recovery spin': 'recovery-spin',
+}
+
+const rideTemplateDefaults: Record<RideTemplate, { minutes: number; miles: number; effort: number; load: RideLoad }> = {
+  'Start ride log': { minutes: 45, miles: 8, effort: 4, load: 'none' },
+  'Hill repeats': { minutes: 45, miles: 6, effort: 8, load: 'none' },
+  'Burley trailer': { minutes: 35, miles: 5, effort: 4, load: 'dog' },
+  'Recovery spin': { minutes: 25, miles: 4, effort: 2, load: 'none' },
+}
+
+const landmarkWords = ['hands', 'feet', 'hips', 'ribs', 'knees', 'shoulders', 'spine', 'breath']
 
 const skipReasons: SkipReason[] = ['work', 'travel', 'fatigue', 'soreness', 'illness', 'no time', 'other']
 const equipmentKinds: EquipmentKind[] = ['bodyweight', 'dumbbell', 'kettlebell', 'band', 'yoga mat', 'carry', 'bike', 'trailer', 'chair', 'foam roller', 'suspension trainer', 'pull-up bar']
@@ -238,6 +267,18 @@ const prescription = (entry: RoutineExercise, exercise?: Exercise) => {
   const pieces = [sets ? `${sets} sets` : '', reps ?? '', duration ? formatDuration(duration) : '', distance ?? ''].filter(Boolean)
   return pieces.join(' / ') || 'open'
 }
+
+const landmarkStep = (step: string, index: number) => {
+  const trimmed = step.trim()
+  if (landmarkWords.some((word) => trimmed.toLowerCase().startsWith(word))) {
+    return trimmed
+  }
+
+  const fallback = landmarkWords[index % landmarkWords.length]
+  return `${fallback}: ${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`
+}
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
 
 const buildDraftEntries = (
   routine: Routine,
@@ -565,6 +606,9 @@ const ExerciseDemoView = ({
 }) => {
   const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
   const sourceHref = media?.sourcePageUrl ?? media?.url ?? exercise.sourceReferences?.[0]?.url
+  const [demoTab, setDemoTab] = useState<'watch' | 'do' | 'mistakes'>('watch')
+  const demoSteps = exercise.instructions.slice(0, 5).map(landmarkStep)
+  const demoMistakes = exercise.commonMistakes.slice(0, 5)
 
   return (
     <section className="exercise-demo-view" role="dialog" aria-modal="true" aria-labelledby="demo-title">
@@ -601,8 +645,8 @@ const ExerciseDemoView = ({
           ) : (
             <div className="no-demo-panel">
               <p className="eyebrow">Media status</p>
-              <h3>No verified demo yet</h3>
-              <p>This exercise needs a reviewed source before RampRep embeds or imports motion media. Written instructions remain available offline.</p>
+              <h3>Demo needs review</h3>
+              <p>This exercise needs a reviewed source before RampRep embeds or imports motion media.</p>
               {sourceHref && (
                 <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
                   <ExternalLink aria-hidden="true" size={18} />
@@ -613,90 +657,79 @@ const ExerciseDemoView = ({
           )}
         </div>
 
-        <div className="demo-meta">
-        <span className="tag">{getExerciseCategory(exercise)}</span>
-        <span className="tag">{exercise.difficulty}</span>
-      </div>
+        <div className="demo-tab-row" role="tablist" aria-label="Exercise demo details">
+          <button className={demoTab === 'watch' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'watch'} onClick={() => setDemoTab('watch')}>
+            Watch
+          </button>
+          <button className={demoTab === 'do' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'do'} onClick={() => setDemoTab('do')}>
+            Do
+          </button>
+          <button className={demoTab === 'mistakes' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'mistakes'} onClick={() => setDemoTab('mistakes')}>
+            Mistakes
+          </button>
+        </div>
 
-        <div className="demo-section">
-          <h3>Purpose</h3>
-          <p>{exercise.purpose ?? exercise.description}</p>
-        </div>
-        <div className="demo-section">
-          <h3>Setup</h3>
-          <p>{exercise.setup ?? exercise.instructions[0]}</p>
-        </div>
-        <div className="demo-section">
-          <h3>Steps</h3>
-          <ol>
-            {exercise.instructions.map((step, stepIndex) => (
-              <li key={`${exercise.id}-step-${stepIndex}`}>{step}</li>
-            ))}
-          </ol>
-        </div>
-        <div className="demo-section">
-          <h3>Form checkpoints</h3>
-          <ul>
-            {exercise.formCues.map((cue, cueIndex) => (
-              <li key={`${exercise.id}-cue-${cueIndex}`}>{cue}</li>
-            ))}
-          </ul>
-        </div>
-        <div className="demo-section">
-          <h3>Common mistakes</h3>
-          <ul>
-            {exercise.commonMistakes.map((mistake, mistakeIndex) => (
-              <li key={`${exercise.id}-mistake-${mistakeIndex}`}>{mistake}</li>
-            ))}
-          </ul>
-        </div>
-        <div className="demo-section two-column-section">
-          <div>
-            <h3>Make it easier</h3>
-            <ul>
-              {(exercise.regressions ?? ['Reduce range, load, or time until each rep is clean.']).map((regression, regressionIndex) => (
-                <li key={`${exercise.id}-regression-${regressionIndex}`}>{regression}</li>
+        {demoTab === 'watch' && (
+          <div className="demo-section demo-glance-panel">
+            <p className="eyebrow">Watch</p>
+            <h3>{verifiedMedia?.title ?? 'Demo needs review'}</h3>
+            <p>{exercise.purpose ?? exercise.description}</p>
+            <div className="demo-meta">
+              <span className="tag">{rampRepGroupForExercise(exercise)}</span>
+              <span className="tag">{exercise.difficulty}</span>
+            </div>
+          </div>
+        )}
+
+        {demoTab === 'do' && (
+          <div className="demo-section demo-glance-panel">
+            <p className="eyebrow">Do</p>
+            <h3>{exercise.setup ?? 'Start tall and choose a clean range.'}</h3>
+            <ol className="demo-big-list">
+              {demoSteps.map((step, stepIndex) => (
+                <li key={`${exercise.id}-step-${stepIndex}`}>{step}</li>
+              ))}
+            </ol>
+            <p className="demo-dose">{exercise.dose ?? prescription({ id: 'demo', routineId: 'demo', exerciseId: exercise.id, section: 'main', order: 1 }, exercise)}</p>
+          </div>
+        )}
+
+        {demoTab === 'mistakes' && (
+          <div className="demo-section demo-glance-panel">
+            <p className="eyebrow">Mistakes</p>
+            <ul className="demo-big-list">
+              {demoMistakes.map((mistake, mistakeIndex) => (
+                <li key={`${exercise.id}-mistake-${mistakeIndex}`}>{mistake}</li>
               ))}
             </ul>
+            <details>
+              <summary>Make easier / harder</summary>
+              <div className="two-column-section">
+                <div>
+                  <h3>Make it easier</h3>
+                  <ul>
+                    {(exercise.regressions ?? ['Reduce range, load, or time until each rep is clean.']).map((regression, regressionIndex) => (
+                      <li key={`${exercise.id}-regression-${regressionIndex}`}>{regression}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3>Make it harder</h3>
+                  <ul>
+                    {(exercise.progressions ?? ['Add a small amount of load, time, or range after form is repeatable.']).map((progression, progressionIndex) => (
+                      <li key={`${exercise.id}-progression-${progressionIndex}`}>{progression}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </details>
           </div>
-          <div>
-            <h3>Make it harder</h3>
-            <ul>
-              {(exercise.progressions ?? ['Add a small amount of load, time, or range after form is repeatable.']).map((progression, progressionIndex) => (
-                <li key={`${exercise.id}-progression-${progressionIndex}`}>{progression}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-        <div className="demo-section">
-          <h3>Dose</h3>
-          <p>{exercise.dose ?? prescription({ id: 'demo', routineId: 'demo', exerciseId: exercise.id, section: 'main', order: 1 }, exercise)}</p>
-        </div>
-        <div className="demo-section">
-          <h3>Safety notes</h3>
-          <ul>
-            {(exercise.safety ?? ['Stop if pain, numbness, dizziness, or sharp joint discomfort appears.']).map((item, itemIndex) => (
-              <li key={`${exercise.id}-safety-${itemIndex}`}>{item}</li>
-            ))}
-          </ul>
-        </div>
-        <div className="demo-section">
-          <h3>Equipment and target areas</h3>
-          <p>{exercise.equipment.join(', ') || 'none'} · {exercise.targetAreas.join(', ') || getExerciseCategory(exercise)}</p>
-        </div>
-        <div className="demo-section">
-          <h3>Sources</h3>
-          <ul>
-            {(exercise.sourceReferences ?? []).map((source) => (
-              <li key={`${exercise.id}-${source.url}`}>
-                <a href={source.url} target="_blank" rel="noreferrer">{source.provider}: {source.title}</a>
-              </li>
-            ))}
-          </ul>
-        </div>
+        )}
+
         <p className="demo-attribution">
           {media?.attributionText ?? 'No verified motion media is attached yet.'}
           {media?.licenseName ? ` License: ${media.licenseName}.` : ''}
+          {exercise.sourceReferences?.length ? ` Source: ${exercise.sourceReferences[0].provider}.` : ''}
         </p>
       </main>
 
@@ -740,6 +773,13 @@ function App() {
   const demoLauncherRef = useRef<HTMLElement | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [draftEntries, setDraftEntries] = useState<WorkoutDraftEntry[]>([])
+  const [activeWorkout, setActiveWorkout] = useState<{
+    stage: ActiveWorkoutStage
+    currentIndex: number
+    startedAt: number
+    routineName: string
+  } | null>(null)
+  const [skipPromptRoutine, setSkipPromptRoutine] = useState<Routine | null>(null)
   const [logMode, setLogMode] = useState<LogMode>('recommended')
   const [durationMinutes, setDurationMinutes] = useState(30)
   const [logNotes, setLogNotes] = useState('')
@@ -752,7 +792,6 @@ function App() {
   const [carbSelectedDate, setCarbSelectedDate] = useState(() => toDateKey(new Date()))
   const [carbMealSlot, setCarbMealSlot] = useState<CarbMealSlot>('breakfast')
   const [carbAmount, setCarbAmount] = useState(0)
-  const [addCarbRepeat, setAddCarbRepeat] = useState(false)
   const [carbEditEntry, setCarbEditEntry] = useState<CarbEntry | null>(null)
   const [presetDraft, setPresetDraft] = useState({ id: '', name: '', netCarbs: 0, servingDescription: '' })
   const [lookupQuery, setLookupQuery] = useState('')
@@ -763,6 +802,21 @@ function App() {
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState('')
   const [carbPanel, setCarbPanel] = useState<'none' | 'lookup' | 'reports' | 'presets'>('none')
+  const [rideDraft, setRideDraft] = useState({
+    template: 'Start ride log' as RideTemplate,
+    minutes: 45,
+    miles: 8,
+    elevationGain: 0,
+    effort: 4,
+    surface: 'mixed' as RideSurface,
+    load: 'none' as RideLoad,
+    notes: '',
+    dogComfortCheck: true,
+    temperature: '',
+    dogWeight: 45,
+    trailerLoadWeight: 0,
+  })
+  const [updateReady, setUpdateReady] = useState(false)
   const [temporaryChangeDraft, setTemporaryChangeDraft] = useState({
     startsOn: '',
     endsOn: '',
@@ -825,6 +879,12 @@ function App() {
     }
   }, [data?.settings])
 
+  useEffect(() => {
+    const handleUpdateReady = () => setUpdateReady(true)
+    window.addEventListener('ramprep:update-ready', handleUpdateReady)
+    return () => window.removeEventListener('ramprep:update-ready', handleUpdateReady)
+  }, [])
+
   const deloadApplied = data ? isDeloadWeek(today, data.schedule.deloadEveryFourthWeek) : false
   const streak = data ? calculateConsistencyStreak(logs, today) : 0
   const selectedRoutineExercises = selectedRoutine
@@ -839,7 +899,16 @@ function App() {
         : buildDraftEntries(selectedRoutine, data, deloadApplied)
       : []
 
-  const showFlash = (message: string) => {
+  const pulseFeedback = () => {
+    if ('vibrate' in navigator && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(12)
+    }
+  }
+
+  const showFlash = (message: string, vibrate = false) => {
+    if (vibrate) {
+      pulseFeedback()
+    }
     setFlash(message)
     window.setTimeout(() => setFlash(''), 3200)
   }
@@ -855,10 +924,29 @@ function App() {
     }
   }
 
+  const startActiveRoutine = (routineId: string, mode: LogMode = 'recommended') => {
+    const routine = routines.find((item) => item.id === routineId)
+    if (!routine || !data) {
+      return
+    }
+
+    const nextEntries = buildDraftEntries(routine, data, deloadApplied)
+    setSelectedRoutineId(routineId)
+    setDraftEntries(nextEntries)
+    setDurationMinutes(routine.estimatedMinutes)
+    setLogNotes('')
+    setLogMode(mode)
+    setActiveWorkout({
+      stage: 'workout',
+      currentIndex: 0,
+      startedAt: new Date().getTime(),
+      routineName: routine.name,
+    })
+    setPage('train')
+  }
+
   const startRoutine = (routineId: string) => {
-    prepareRoutine(routineId)
-    setLogMode('recommended')
-    setPage('log')
+    startActiveRoutine(routineId, 'recommended')
   }
 
   const startFreeWorkout = () => {
@@ -868,6 +956,133 @@ function App() {
     setDurationMinutes(settingsDraft?.durationPreference ?? 30)
     setLogNotes('')
     setPage('log')
+  }
+
+  const updateDraftEntryAt = (index: number, updater: (entry: WorkoutDraftEntry) => WorkoutDraftEntry) => {
+    setDraftEntries((current) => {
+      const base = current.length ? current : visibleDraftEntries
+      return base.map((item, itemIndex) => (itemIndex === index ? updater(item) : item))
+    })
+  }
+
+  const repeatActiveSet = (index: number) => {
+    setDraftEntries((current) => {
+      const base = current.length ? current : visibleDraftEntries
+      const source = base[index]
+      if (!source) {
+        return base
+      }
+
+      return [
+        ...base.slice(0, index + 1),
+        { ...source, routineExerciseId: undefined, notes: source.notes ? `${source.notes} (repeat)` : 'repeat set' },
+        ...base.slice(index + 1),
+      ]
+    })
+    pulseFeedback()
+  }
+
+  const advanceActiveWorkout = () => {
+    if (!activeWorkout) {
+      return
+    }
+
+    if (activeWorkout.currentIndex >= visibleDraftEntries.length - 1) {
+      setActiveWorkout({ ...activeWorkout, stage: 'review' })
+      pulseFeedback()
+      return
+    }
+
+    setActiveWorkout({ ...activeWorkout, currentIndex: activeWorkout.currentIndex + 1 })
+    pulseFeedback()
+  }
+
+  const handleSkipRoutine = async (reason: SkipReason) => {
+    if (!skipPromptRoutine) {
+      return
+    }
+
+    await createSkippedWorkout(skipPromptRoutine, reason)
+    setSkipPromptRoutine(null)
+    await refresh()
+    showFlash('Skipped workout logged.', true)
+  }
+
+  const applyRideTemplate = (template: RideTemplate) => {
+    const defaults = rideTemplateDefaults[template]
+    setRideDraft((current) => ({
+      ...current,
+      template,
+      minutes: defaults.minutes,
+      miles: defaults.miles,
+      effort: defaults.effort,
+      load: defaults.load,
+      dogComfortCheck: template === 'Burley trailer' ? true : current.dogComfortCheck,
+    }))
+  }
+
+  const handleSaveRideLog = async () => {
+    if (!data) {
+      return
+    }
+
+    if (rideDraft.template === 'Hill repeats' && (rideDraft.load === 'dog' || rideDraft.load === 'trailer')) {
+      showFlash('No hard repeats with dog or trailer load. Choose Burley trailer or unload first.')
+      return
+    }
+
+    if (rideDraft.template === 'Burley trailer' && !rideDraft.dogComfortCheck) {
+      showFlash('Dog comfort check comes first.')
+      return
+    }
+
+    const exerciseId = rideTemplateExerciseId[rideDraft.template]
+    const exercise = exerciseById.get(exerciseId)
+    const totalTowedLoad = rideDraft.load === 'dog' || rideDraft.load === 'trailer'
+      ? rideDraft.dogWeight + rideDraft.trailerLoadWeight
+      : 0
+    const entry: WorkoutDraftEntry = {
+      exerciseId,
+      equipmentKey: rideDraft.load === 'none' ? 'bike' : `bike-${rideDraft.load}`,
+      exerciseName: exercise?.name ?? rideDraft.template,
+      durationSeconds: rideDraft.minutes * 60,
+      distance: `${rideDraft.miles} mi`,
+      effort: rideDraft.effort,
+      notes: rideDraft.notes || undefined,
+      customFields: {
+        elevationGain: rideDraft.elevationGain,
+        surface: rideDraft.surface,
+        load: rideDraft.load,
+        dogComfortCheck: rideDraft.dogComfortCheck,
+        temperature: rideDraft.temperature || undefined,
+        dogWeight: rideDraft.dogWeight,
+        trailerLoadWeight: rideDraft.trailerLoadWeight,
+        totalTowedLoad,
+      },
+    }
+
+    await createWorkoutLog({ name: `Ride: ${rideDraft.template}` }, [entry], {
+      totalMinutes: rideDraft.minutes,
+      notes: rideDraft.notes || undefined,
+      travelMode: data.schedule.travelMode,
+      deloadApplied,
+    })
+    await refresh()
+    showFlash('Ride logged.', true)
+  }
+
+  const handleClearLocalAppCache = async () => {
+    if ('caches' in window) {
+      const keys = await caches.keys()
+      await Promise.all(keys.filter((key) => key.startsWith('ramprep')).map((key) => caches.delete(key)))
+    }
+
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(registrations.map((registration) => registration.update()))
+    }
+
+    showFlash('App cache cleared. IndexedDB data preserved.', true)
   }
 
   const openExerciseDemo = (exerciseId: string, launcher?: HTMLElement) => {
@@ -956,8 +1171,9 @@ function App() {
       deloadApplied,
     })
     setLogNotes('')
+    setActiveWorkout(null)
     await refresh()
-    showFlash('Workout logged.')
+    showFlash('Workout logged.', true)
     setPage('dashboard')
   }
 
@@ -996,8 +1212,14 @@ function App() {
       setLogMode('free')
       setSelectedRoutineId('')
       setDurationMinutes(settingsDraft?.durationPreference ?? 30)
-      setDraftEntries((current) => [...(logMode === 'free' ? current : []), draftEntry])
-      setPage('log')
+      setDraftEntries([draftEntry])
+      setActiveWorkout({
+        stage: 'workout',
+        currentIndex: 0,
+        startedAt: new Date().getTime(),
+        routineName: 'Free workout',
+      })
+      setPage('train')
       return
     }
 
@@ -1189,10 +1411,8 @@ function App() {
 
   const handleAddManualCarbs = async () => {
     await addCarbEntry({ netCarbs: carbAmount, sourceType: 'manual', sourceLabel: 'manual' })
-    if (!addCarbRepeat) {
-      setCarbAmount(0)
-    }
-    showFlash('Net carbs added.')
+    setCarbAmount(0)
+    showFlash('Net carbs added.', true)
   }
 
   const handleSaveCarbEdit = async () => {
@@ -1314,7 +1534,7 @@ function App() {
       sourceLabel: lookupSelected.attribution,
       savedFoodName: lookupSelected.name,
     })
-    showFlash('Lookup net carbs added.')
+    showFlash('Lookup net carbs added.', true)
   }
 
   const handleSaveLookupPreset = async () => {
@@ -1352,7 +1572,6 @@ function App() {
     )
   }
 
-  const recentLogs = logs.slice(0, 5)
   const carbReports = buildCarbReports(carbEntries, data.carbGoalHistory, data.carbSettings, today)
   const todayCarbStatus = carbStatusText(carbReports.today.total, carbReports.today.goal)
   const selectedDayEntries = carbEntries
@@ -1375,23 +1594,33 @@ function App() {
   const hillTrailerMinutes = entries
     .filter((entry) => /hill|ride|trailer|burley|climb/i.test(entry.exerciseName))
     .reduce((total, entry) => total + Math.round((entry.durationSeconds ?? 0) / 60), 0)
+  const librarySearchText = libraryQuery.trim().toLowerCase()
+  const libraryFiltersActive = Boolean(categoryFilter || groupFilter || equipmentFilter || purposeFilter || difficultyFilter)
   const filteredExercises = exercises.filter((exercise) => {
-    const query = libraryQuery.trim().toLowerCase()
+    const rampRepGroup = rampRepGroupForExercise(exercise)
     const searchable = [
       exercise.name,
       exercise.description,
       exercise.targetAreas.join(' '),
       exercise.equipment.join(' '),
       exercise.group ?? '',
+      rampRepGroup,
       exercise.bikeTourPurpose?.join(' ') ?? '',
     ]
       .join(' ')
       .toLowerCase()
+    const searchableMatch = !librarySearchText || searchable.includes(librarySearchText)
+    const defaultVisible =
+      editMode ||
+      libraryFiltersActive ||
+      isDefaultLibraryExercise(exercise) ||
+      (isSearchOnlyExercise(exercise) && Boolean(librarySearchText) && searchableMatch)
 
     return (
-      (!query || searchable.includes(query)) &&
+      defaultVisible &&
+      searchableMatch &&
       (!categoryFilter || getExerciseCategory(exercise) === categoryFilter) &&
-      (!groupFilter || exercise.group === groupFilter) &&
+      (!groupFilter || rampRepGroup === groupFilter) &&
       (!equipmentFilter || exercise.equipment.includes(equipmentFilter as EquipmentKind)) &&
       (!purposeFilter || exercise.bikeTourPurpose?.includes(purposeFilter as BikeTourPurpose)) &&
       (!difficultyFilter || exercise.difficulty === difficultyFilter)
@@ -1418,6 +1647,28 @@ function App() {
       ? 'Recovery week: reduce intensity, use mobility, and watch soreness before adding volume.'
       : 'Recovery rhythm: keep every fourth week lighter or switch to recovery mode when soreness rises.',
   ]
+  const trainRoutine = scheduledToday ?? nextRecommendation?.routine ?? selectedRoutine
+  const trainRoutineExercises = trainRoutine
+    ? routineExercises
+        .filter((entry) => entry.routineId === trainRoutine.id)
+        .sort((a, b) => a.order - b.order)
+        .slice(0, 5)
+        .map((entry) => exerciseById.get(entry.exerciseId)?.name ?? entry.exerciseId)
+    : []
+  const activeWorkoutEntry = activeWorkout ? visibleDraftEntries[clamp(activeWorkout.currentIndex, 0, Math.max(0, visibleDraftEntries.length - 1))] : undefined
+  const activeWorkoutExercise = activeWorkoutEntry ? exerciseById.get(activeWorkoutEntry.exerciseId) : undefined
+  const activeWorkoutProgress = activeWorkout ? `${Math.min(activeWorkout.currentIndex + 1, visibleDraftEntries.length)} of ${visibleDraftEntries.length}` : ''
+  const activeWorkoutTarget = activeWorkoutEntry
+    ? [
+        activeWorkoutEntry.sets && activeWorkoutEntry.reps ? `${activeWorkoutEntry.sets} x ${activeWorkoutEntry.reps}` : activeWorkoutEntry.reps,
+        activeWorkoutEntry.weight ? `@ ${activeWorkoutEntry.weight} ${data.settings.units}` : '',
+        activeWorkoutEntry.durationSeconds ? formatDuration(activeWorkoutEntry.durationSeconds) : '',
+        activeWorkoutEntry.distance ?? '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : ''
+  const activeWorkoutElapsedMinutes = activeWorkout ? durationMinutes : 0
 
   return (
     <div className="app-shell">
@@ -1426,11 +1677,13 @@ function App() {
           <LogoMark />
           <div>
             <p className="eyebrow">RampRep · Ride Across America Preparation</p>
-            <h1>
-              {page === 'dashboard' && 'Today'}
-              {page === 'workouts' && 'Workouts'}
-              {page === 'log' && 'Workout Log'}
-              {page === 'carbs' && 'Net Carbs'}
+              <h1>
+                {page === 'dashboard' && 'Today'}
+                {page === 'train' && 'Train'}
+                {page === 'ride' && 'Ride'}
+                {page === 'workouts' && 'Workouts'}
+                {page === 'log' && 'Workout Log'}
+                {page === 'carbs' && 'Carbs'}
               {page === 'progress' && 'Progress'}
               {page === 'more' && 'More'}
               {page === 'settings' && 'Settings'}
@@ -1464,13 +1717,22 @@ function App() {
         </div>
       )}
 
+      {updateReady && (
+        <button className="update-banner" type="button" onClick={() => window.location.reload()}>
+          Update available - refresh
+        </button>
+      )}
+
       {page === 'dashboard' && (
-        <main className="page-grid">
-          <Card className="hero-card">
+        <main className="page-grid today-cockpit">
+          <Card className="hero-card cockpit-primary train-today-tile">
             <div>
-              <p className="eyebrow">{scheduledToday ? 'Today suggested' : 'Next up'}</p>
+              <p className="eyebrow">Train today</p>
               <h2>{(scheduledToday ?? nextRecommendation?.routine)?.name ?? 'Choose a routine'}</h2>
-              <p>{deloadApplied ? 'Deload week is active. Volume is reduced in the logger.' : 'Built for core, back, hips, mobility, and touring durability.'}</p>
+              <p className="cockpit-subline">
+                {(scheduledToday ?? nextRecommendation?.routine)?.estimatedMinutes ?? settingsDraft.durationPreference} min
+                {deloadApplied ? ' · deload volume' : ' · core, back, hips'}
+              </p>
             </div>
             {(scheduledToday ?? nextRecommendation?.routine) && (
               <button className="primary-button" type="button" onClick={() => startRoutine((scheduledToday ?? nextRecommendation!.routine).id)}>
@@ -1480,36 +1742,24 @@ function App() {
             )}
           </Card>
 
-          <Card>
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">Quick log</p>
-                <h2>Get the useful work recorded</h2>
-              </div>
-              <ClipboardList aria-hidden="true" size={20} />
+          <Card className="cockpit-tile ride-tile">
+            <div>
+              <p className="eyebrow">Ride</p>
+              <h2>{rideSessions} logged</h2>
+              <p>Ride, hill, gravel, or Burley.</p>
             </div>
-            <div className="button-grid">
-              <button className="ghost-button" type="button" onClick={() => setPage('log')}>
-                Open Log
-              </button>
-              <button className="ghost-button" type="button" onClick={startFreeWorkout}>
-                Free workout
-              </button>
-            </div>
+            <button className="ghost-button" type="button" onClick={() => setPage('ride')}>
+              Start ride
+            </button>
           </Card>
 
-          <Card className="carb-summary-card">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">Net carbs today</p>
-                <h2>
-                  {carbReports.today.total} / {carbReports.today.goal}g
-                </h2>
-              </div>
-              <span className="tag">{todayCarbStatus}</span>
-            </div>
-            <div className="progress-track">
-              <span style={{ width: `${Math.min(100, (carbReports.today.total / Math.max(1, carbReports.today.goal)) * 100)}%` }} />
+          <Card className="cockpit-tile carb-summary-card">
+            <div>
+              <p className="eyebrow">Carbs</p>
+              <h2>
+                {carbReports.today.total} / {carbReports.today.goal}g
+              </h2>
+              <p>{todayCarbStatus}</p>
             </div>
             <button
               className="ghost-button"
@@ -1519,51 +1769,297 @@ function App() {
                 setPage('carbs')
               }}
             >
-              <Plus aria-hidden="true" size={18} />
               Add net carbs
             </button>
           </Card>
 
-          <Card className="roadmap-card">
-            <div className="section-title">
-              <h2>Next Milestone</h2>
-              <MapIcon aria-hidden="true" size={20} />
-            </div>
+          <Card className="cockpit-tile roadmap-card">
             {nextRoadmapMilestone ? (
-              <div className="stack">
-                <strong>{nextRoadmapMilestone.title}</strong>
+              <div>
+                <p className="eyebrow">Next milestone</p>
+                <h2>{nextRoadmapMilestone.title}</h2>
                 <p>{nextRoadmapMilestone.description}</p>
               </div>
             ) : (
               <EmptyState title="Roadmap complete" body="All seeded milestones are checked off." />
             )}
+            <button className="ghost-button" type="button" onClick={() => setPage('roadmap')}>
+              Open roadmap
+            </button>
           </Card>
+        </main>
+      )}
 
-          <Card>
-            <div className="section-title">
-              <h2>Recent Sessions</h2>
-              <button className="icon-button" type="button" aria-label="Open progress" onClick={() => setPage('progress')}>
-                <BarChart3 aria-hidden="true" size={18} />
-              </button>
+      {skipPromptRoutine && (
+        <section className="skip-prompt-mode" role="dialog" aria-modal="true" aria-labelledby="skip-prompt-title">
+          <div>
+            <p className="eyebrow">Skip workout</p>
+            <h2 id="skip-prompt-title">{skipPromptRoutine.name}</h2>
+          </div>
+          <div className="skip-reason-grid">
+            <button type="button" onClick={() => void handleSkipRoutine('work')}>Work</button>
+            <button type="button" onClick={() => void handleSkipRoutine('fatigue')}>Tired</button>
+            <button type="button" onClick={() => void handleSkipRoutine('soreness')}>Sore</button>
+            <button type="button" onClick={() => void handleSkipRoutine('other')}>Other</button>
+          </div>
+          <button className="ghost-button" type="button" onClick={() => setSkipPromptRoutine(null)}>
+            Back
+          </button>
+        </section>
+      )}
+
+      {page === 'train' && activeWorkout?.stage === 'workout' && activeWorkoutEntry && (
+        <main className="active-workout-mode" aria-label="Active workout shows one exercise at a time">
+          <header className="active-workout-top">
+            <button className="demo-back-button" type="button" onClick={() => setActiveWorkout(null)}>
+              <ArrowLeft aria-hidden="true" size={19} />
+              Back
+            </button>
+            <div>
+              <p className="eyebrow">{activeWorkout.routineName}</p>
+              <h2>{activeWorkoutProgress}</h2>
             </div>
-            {recentLogs.length ? (
-              <div className="stack">
-                {recentLogs.map((log) => (
-                  <div className="log-row" key={log.id}>
-                    <span className={`dot ${log.status}`} />
-                    <div>
-                      <strong>{log.routineName}</strong>
-                      <p>
-                        {formatShortDate(log.completedAt)}
-                        {log.status === 'skipped' ? ` · skipped: ${log.skipReason}` : ` · ${log.totalMinutes ?? 0} min`}
-                      </p>
-                    </div>
-                  </div>
+          </header>
+
+          <section className="active-exercise-card">
+            <p className="eyebrow">Current exercise only</p>
+            <h2>{activeWorkoutEntry.exerciseName}</h2>
+            <strong className="active-target">{activeWorkoutTarget || 'Open set'}</strong>
+            {activeWorkoutEntry.lastSummary && <p className="last-summary">{activeWorkoutEntry.lastSummary}</p>}
+            <div className="active-demo-row">
+              {activeWorkoutExercise && <ExerciseDemoButton exercise={activeWorkoutExercise} onOpen={openExerciseDemo} />}
+            </div>
+          </section>
+
+          <section className="active-stepper-grid">
+            <NumberStepper
+              label="Sets"
+              value={activeWorkoutEntry.sets}
+              min={0}
+              max={20}
+              step={1}
+              quickOptions={[1, 2, 3, 4, 5]}
+              onChange={(value) => updateDraftEntryAt(activeWorkout.currentIndex, (entry) => ({ ...entry, sets: value }))}
+            />
+            <NumberStepper
+              label="Reps"
+              value={firstNumber(activeWorkoutEntry.reps)}
+              min={0}
+              max={100}
+              step={1}
+              quickOptions={[5, 8, 10, 12, 15, 20]}
+              onChange={(value) => updateDraftEntryAt(activeWorkout.currentIndex, (entry) => ({ ...entry, reps: value == null ? undefined : String(value) }))}
+            />
+            <WeightPicker
+              units={data.settings.units}
+              value={activeWorkoutEntry.weight}
+              onChange={(value) => updateDraftEntryAt(activeWorkout.currentIndex, (entry) => ({ ...entry, weight: value }))}
+            />
+          </section>
+
+          <details className="active-collapsible">
+            <summary>Notes</summary>
+            <textarea value={activeWorkoutEntry.notes ?? ''} onChange={(event) => updateDraftEntryAt(activeWorkout.currentIndex, (entry) => ({ ...entry, notes: event.target.value }))} />
+          </details>
+
+          <details className="active-collapsible">
+            <summary>Swap</summary>
+            <select
+              value={activeWorkoutEntry.exerciseId}
+              onChange={(event) => {
+                const nextExercise = exerciseById.get(event.target.value)
+                if (nextExercise) {
+                  applyExerciseToDraftEntry(activeWorkout.currentIndex, nextExercise)
+                }
+              }}
+            >
+              {filteredExercises.map((exerciseOption) => (
+                <option key={exerciseOption.id} value={exerciseOption.id}>
+                  {exerciseOption.name}
+                </option>
+              ))}
+            </select>
+          </details>
+
+          <footer className="active-workout-actions">
+            <button className="primary-button active-primary" type="button" onClick={advanceActiveWorkout}>
+              {activeWorkoutPrimaryActions[0]}
+            </button>
+            <button className="ghost-button active-secondary" type="button" onClick={() => repeatActiveSet(activeWorkout.currentIndex)}>
+              {activeWorkoutPrimaryActions[1]}
+            </button>
+            <button className="ghost-button active-secondary" type="button" onClick={advanceActiveWorkout}>
+              {activeWorkoutPrimaryActions[2]}
+            </button>
+          </footer>
+        </main>
+      )}
+
+      {page === 'train' && activeWorkout?.stage === 'review' && (
+        <main className="active-workout-mode review-workout-mode">
+          <header className="active-workout-top">
+            <div>
+              <p className="eyebrow">Review workout</p>
+              <h2>{activeWorkout.routineName}</h2>
+            </div>
+            <span className="tag">{activeWorkoutElapsedMinutes} min</span>
+          </header>
+          <section className="review-exercise-list">
+            {visibleDraftEntries.map((entry, index) => (
+              <div className="review-row" key={`${entry.exerciseId}-${index}`}>
+                <strong>{entry.exerciseName}</strong>
+                <span>{[entry.sets && entry.reps ? `${entry.sets} x ${entry.reps}` : entry.reps, entry.weight ? `${entry.weight} ${data.settings.units}` : '', entry.distance ?? ''].filter(Boolean).join(' · ') || 'done'}</span>
+              </div>
+            ))}
+          </section>
+          <EffortPicker
+            value={visibleDraftEntries[0]?.effort}
+            onChange={(value) => {
+              setDraftEntries((current) => (current.length ? current : visibleDraftEntries).map((entry) => ({ ...entry, effort: value })))
+            }}
+          />
+          <footer className="active-workout-actions">
+            <button className="primary-button active-primary" type="button" onClick={() => void handleCompleteWorkout()}>
+              Save
+            </button>
+            <button
+              className="danger-button active-secondary"
+              type="button"
+              onClick={() => {
+                setActiveWorkout(null)
+                setDraftEntries([])
+                setPage('train')
+              }}
+            >
+              Discard
+            </button>
+          </footer>
+        </main>
+      )}
+
+      {page === 'train' && !activeWorkout && (
+        <main className="page-grid train-page">
+          <Card className="hero-card train-hero-card">
+            <div>
+              <p className="eyebrow">Today recommended</p>
+              <h2>{trainRoutine?.name ?? 'Choose workout'}</h2>
+              <p>{trainRoutine?.estimatedMinutes ?? settingsDraft.durationPreference} min</p>
+              <div className="train-preview-list">
+                {trainRoutineExercises.map((name) => (
+                  <span key={name}>{name}</span>
                 ))}
               </div>
-            ) : (
-              <EmptyState title="No sessions yet" body="Your first completed workout will appear here." />
+            </div>
+            {trainRoutine && (
+              <button className="primary-button" type="button" onClick={() => startActiveRoutine(trainRoutine.id)}>
+                Start
+              </button>
             )}
+          </Card>
+          <div className="train-secondary-actions">
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => {
+                setWorkoutsTab('routines')
+                setPage('workouts')
+              }}
+            >
+              Choose workout
+            </button>
+            <button className="ghost-button" type="button" onClick={startFreeWorkout}>
+              Free log
+            </button>
+            {trainRoutine && (
+              <button className="ghost-button" type="button" onClick={() => setSkipPromptRoutine(trainRoutine)}>
+                Skip
+              </button>
+            )}
+          </div>
+        </main>
+      )}
+
+      {page === 'ride' && (
+        <main className="page-grid ride-page">
+          <Card className="hero-card ride-hero-card">
+            <div>
+              <p className="eyebrow">Ride</p>
+              <h2>{rideDraft.template}</h2>
+              <p>{rideDraft.template === 'Burley trailer' ? 'Conditioning, not punishment. Dog comfort comes first.' : 'Log the ride without opening a training console.'}</p>
+            </div>
+            <button className="primary-button" type="button" onClick={() => void handleSaveRideLog()}>
+              Save ride
+            </button>
+          </Card>
+
+          <section className="ride-template-grid">
+            {(['Start ride log', 'Hill repeats', 'Burley trailer', 'Recovery spin'] as RideTemplate[]).map((template) => (
+              <button className={rideDraft.template === template ? 'active' : ''} key={template} type="button" onClick={() => applyRideTemplate(template)}>
+                {template}
+              </button>
+            ))}
+          </section>
+
+          <Card className="ride-log-card">
+            {rideDraft.template === 'Burley trailer' && (
+              <label className="dog-check-card">
+                <input
+                  checked={rideDraft.dogComfortCheck}
+                  type="checkbox"
+                  onChange={(event) => setRideDraft({ ...rideDraft, dogComfortCheck: event.target.checked })}
+                />
+                <span>
+                  <strong>Dog comfort check first</strong>
+                  <small>Water, shade, harness, surface, heat, and calm behavior.</small>
+                </span>
+              </label>
+            )}
+            <div className="ride-field-grid">
+              <NumberStepper label="Minutes" value={rideDraft.minutes} min={0} max={600} step={5} quickOptions={[15, 25, 35, 45, 60, 90]} onChange={(value) => setRideDraft({ ...rideDraft, minutes: value ?? 0 })} />
+              <NumberStepper label="Miles" value={rideDraft.miles} min={0} max={200} step={0.5} suffix=" mi" quickOptions={[3, 5, 8, 10, 20, 40]} onChange={(value) => setRideDraft({ ...rideDraft, miles: value ?? 0 })} />
+              <NumberStepper label="Elevation" value={rideDraft.elevationGain} min={0} max={20000} step={50} suffix=" ft" quickOptions={[0, 250, 500, 1000, 2000]} onChange={(value) => setRideDraft({ ...rideDraft, elevationGain: value ?? 0 })} />
+              <EffortPicker value={rideDraft.effort} onChange={(value) => setRideDraft({ ...rideDraft, effort: value ?? 1 })} />
+              <label>
+                Surface
+                <select value={rideDraft.surface} onChange={(event) => setRideDraft({ ...rideDraft, surface: event.target.value as RideSurface })}>
+                  <option value="pavement">pavement</option>
+                  <option value="gravel">gravel</option>
+                  <option value="mixed">mixed</option>
+                </select>
+              </label>
+              <label>
+                Load
+                <select value={rideDraft.load} onChange={(event) => setRideDraft({ ...rideDraft, load: event.target.value as RideLoad })}>
+                  <option value="none">none</option>
+                  <option value="bags">bags</option>
+                  <option value="trailer">trailer</option>
+                  <option value="dog">dog</option>
+                </select>
+              </label>
+            </div>
+
+            {(rideDraft.template === 'Burley trailer' || rideDraft.load === 'dog' || rideDraft.load === 'trailer') && (
+              <div className="burley-ride-panel">
+                <p className="notice">No hard repeats with dog. Keep it gentle, short, and boringly successful.</p>
+                <div className="ride-field-grid">
+                  <label>
+                    Temperature
+                    <input value={rideDraft.temperature} inputMode="numeric" placeholder="optional" onChange={(event) => setRideDraft({ ...rideDraft, temperature: event.target.value })} />
+                  </label>
+                  <WeightPicker units={data.settings.units} label="Dog weight" value={rideDraft.dogWeight} onChange={(value) => setRideDraft({ ...rideDraft, dogWeight: value ?? 45 })} />
+                  <WeightPicker units={data.settings.units} label="Trailer/load" value={rideDraft.trailerLoadWeight} onChange={(value) => setRideDraft({ ...rideDraft, trailerLoadWeight: value ?? 0 })} />
+                  <div className="total-load-tile">
+                    <p className="eyebrow">Total towed load</p>
+                    <strong>{rideDraft.dogWeight + rideDraft.trailerLoadWeight} {data.settings.units}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <details className="active-collapsible">
+              <summary>Notes</summary>
+              <textarea value={rideDraft.notes} onChange={(event) => setRideDraft({ ...rideDraft, notes: event.target.value })} />
+            </details>
           </Card>
         </main>
       )}
@@ -1579,6 +2075,13 @@ function App() {
               <Menu aria-hidden="true" size={21} />
             </div>
             <div className="more-menu-grid">
+              <button type="button" onClick={() => setPage('progress')}>
+                <BarChart3 aria-hidden="true" size={18} />
+                <span>
+                  <strong>Reports</strong>
+                  <small>Training totals and trends</small>
+                </span>
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -1616,7 +2119,21 @@ function App() {
                 <Settings aria-hidden="true" size={18} />
                 <span>
                   <strong>Settings</strong>
-                  <small>Equipment, backup, advanced</small>
+                  <small>Equipment and app version</small>
+                </span>
+              </button>
+              <button type="button" onClick={() => setPage('settings')}>
+                <Download aria-hidden="true" size={18} />
+                <span>
+                  <strong>Backup</strong>
+                  <small>JSON, CSV, import</small>
+                </span>
+              </button>
+              <button type="button" onClick={() => setEditMode((current) => !current)}>
+                <Pencil aria-hidden="true" size={18} />
+                <span>
+                  <strong>Advanced edit mode</strong>
+                  <small>{editMode ? 'On' : 'Off'} by default for daily screens</small>
                 </span>
               </button>
             </div>
@@ -1936,7 +2453,7 @@ function App() {
                       Group
                       <select value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
                         <option value="">All groups</option>
-                        {exerciseGroups.map((group) => (
+                        {sweatModeLibraryGroups.map((group) => (
                           <option key={`library-group-${group}`} value={group}>
                             {group}
                           </option>
@@ -2000,7 +2517,7 @@ function App() {
                   <Card key={exercise.id} className="exercise-card">
                     <div className="exercise-card-main">
                       <div>
-                        <span className="tag">{exercise.group ?? getExerciseCategory(exercise)}</span>
+                        <span className="tag">{rampRepGroupForExercise(exercise)}</span>
                         <h2>{exercise.name}</h2>
                         <p>{exercise.purpose ?? exercise.description}</p>
                         <small>{isVerifiedDemoMedia(getExerciseDemoMedia(exercise.id)) ? 'Verified source attached' : 'No verified demo yet'}</small>
@@ -2650,28 +3167,20 @@ function App() {
                 </button>
               ))}
             </div>
-            <NumberStepper
-              label="Net carbs"
-              value={carbAmount}
-              min={0}
-              max={300}
-              step={1}
-              suffix="g"
-              quickOptions={carbQuickPicks}
-              quickIncrements={[1, 5, 10]}
-              onChange={(value) => setCarbAmount(normalizeCarbGrams(value))}
-            />
-            <label className="inline-check">
-              <input checked={addCarbRepeat} type="checkbox" onChange={(event) => setAddCarbRepeat(event.target.checked)} />
-              Add and repeat
-            </label>
+            <div className="carb-integer-picker" aria-label="Net carb integer picker">
+              <button type="button" onClick={() => setCarbAmount((value) => normalizeCarbGrams(value - 5))}>-5</button>
+              <button type="button" onClick={() => setCarbAmount((value) => normalizeCarbGrams(value - 1))}>-1</button>
+              <strong>{carbAmount}g</strong>
+              <button type="button" onClick={() => setCarbAmount((value) => normalizeCarbGrams(value + 1))}>+1</button>
+              <button type="button" onClick={() => setCarbAmount((value) => normalizeCarbGrams(value + 5))}>+5</button>
+            </div>
             <button className="primary-button" type="button" onClick={() => void handleAddManualCarbs()}>
               <Plus aria-hidden="true" size={18} />
               Add {carbAmount}g to {carbMealSlotLabels[carbMealSlot]}
             </button>
           </Card>
 
-          <Card className="meal-breakdown-card">
+          {carbPanel === 'reports' && <Card className="meal-breakdown-card">
             <div className="section-title">
               <div>
                 <p className="eyebrow">{carbSelectedDate}</p>
@@ -2780,9 +3289,15 @@ function App() {
                 )
               })}
             </div>
-          </Card>
+          </Card>}
 
-          <Card>
+          <Card className="carb-more-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">Carbs</p>
+                <h2>More options</h2>
+              </div>
+            </div>
             <div className="button-grid">
               <button className={carbPanel === 'lookup' ? 'primary-button' : 'ghost-button'} type="button" onClick={() => setCarbPanel(carbPanel === 'lookup' ? 'none' : 'lookup')}>
                 Food lookup
@@ -3355,6 +3870,20 @@ function App() {
           <Card>
             <div className="section-title">
               <div>
+                <p className="eyebrow">App version</p>
+                <h2>{appVersion}</h2>
+              </div>
+              <RefreshCcw aria-hidden="true" size={20} />
+            </div>
+            <p className="notice">RampRep uses a versioned, network-first app cache. Clearing it preserves IndexedDB workout logs, net-carb logs, settings, defaults, and roadmap data.</p>
+            <button className="ghost-button" type="button" onClick={() => void handleClearLocalAppCache()}>
+              Clear local app cache
+            </button>
+          </Card>
+
+          <Card>
+            <div className="section-title">
+              <div>
                 <p className="eyebrow">Private local settings</p>
                 <h2>Net Carb Settings</h2>
               </div>
@@ -3732,13 +4261,10 @@ function App() {
           const Icon = navIconByPage[item.page]
           return (
             <button
-              className={page === item.page || (item.page === 'more' && ['workouts', 'settings', 'roadmap'].includes(page)) ? 'active' : ''}
+              className={page === item.page || (item.page === 'more' && ['workouts', 'settings', 'roadmap', 'progress'].includes(page)) ? 'active' : ''}
               key={item.page}
               type="button"
               onClick={() => {
-                if (item.page === 'log' && selectedRoutine) {
-                  prepareRoutine(selectedRoutine.id)
-                }
                 setPage(item.page)
               }}
             >

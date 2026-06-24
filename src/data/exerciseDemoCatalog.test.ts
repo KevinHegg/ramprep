@@ -6,6 +6,7 @@ import {
   needsReviewExerciseDemoMedia,
   priorityExerciseIds,
 } from './exerciseDemoCatalog'
+import { needsReviewExerciseSources, verifiedExerciseDemoSources, verifiedExerciseSources } from './verifiedExerciseSources'
 
 describe('exercise demo catalog', () => {
   it('has a catalog entry for every priority exercise', () => {
@@ -28,5 +29,13 @@ describe('exercise demo catalog', () => {
     expect(isVerifiedDemoMedia(tibialisRaise)).toBe(false)
     expect(tibialisRaise?.attributionText).toContain('No reviewed in-app motion demo yet')
     expect(needsReviewExerciseDemoMedia.length).toBeGreaterThan(0)
+  })
+
+  it('publishes curated source records without upgrading unreviewed media', () => {
+    const sourceIds = new Set(verifiedExerciseSources.map((source) => source.exerciseId))
+
+    expect(priorityExerciseIds.every((exerciseId) => sourceIds.has(exerciseId))).toBe(true)
+    expect(verifiedExerciseDemoSources.every((source) => source.qualityStatus === 'verified')).toBe(true)
+    expect(needsReviewExerciseSources.some((source) => source.exerciseId === 'tibialis-raise')).toBe(true)
   })
 })

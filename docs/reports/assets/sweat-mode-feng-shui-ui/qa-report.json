@@ -1,0 +1,27 @@
+{
+  "local_url": "http://127.0.0.1:5173/ramprep/",
+  "viewports": {
+    "390x844": {
+      "today": "no horizontal overflow",
+      "train": "no horizontal overflow",
+      "active_workout": "one exercise; 72px primary actions; no horizontal overflow",
+      "ride": "no horizontal overflow",
+      "carbs": "six meal buttons; no horizontal overflow",
+      "more": "no horizontal overflow",
+      "demo": "Watch/Do/Mistakes tabs; no horizontal overflow"
+    },
+    "430x932": {
+      "today": "scrollWidth 430 / clientWidth 430",
+      "train": "scrollWidth 430 / clientWidth 430",
+      "ride": "scrollWidth 430 / clientWidth 430",
+      "carbs": "scrollWidth 430 / clientWidth 430",
+      "more": "scrollWidth 430 / clientWidth 430",
+      "settings_dark": "theme dark via Settings; scrollWidth 430 / clientWidth 430"
+    }
+  },
+  "test_results": {
+    "lint": "npm run lint - passed",
+    "tests": "npm test -- --run - 13 files, 53 tests passed",
+    "build": "npm run build - passed"
+  }
+}

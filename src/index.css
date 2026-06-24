@@ -17,6 +17,21 @@
   --success: #2f7d4f;
   --success-soft: rgba(47, 125, 79, 0.12);
   --warning-soft: rgba(210, 107, 67, 0.14);
+  --font-body: 18px;
+  --font-label: 16px;
+  --font-card-title: 24px;
+  --font-screen-title: 38px;
+  --font-primary-number: 72px;
+  --space-1: 6px;
+  --space-2: 10px;
+  --space-3: 14px;
+  --space-4: 20px;
+  --space-5: 28px;
+  --radius-card: 8px;
+  --radius-control: 8px;
+  --touch-primary: 72px;
+  --touch-secondary: 56px;
+  --touch-utility: 44px;
   --shadow: 0 6px 24px rgba(27, 36, 43, 0.06);
   --shadow-strong: 0 14px 40px rgba(27, 36, 43, 0.16);
   font-family:

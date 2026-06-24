@@ -1,5 +1,5 @@
-const CACHE_NAME = 'ramprep-v1-1'
-const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './pwa-icon.svg', './favicon.svg']
+const CACHE_NAME = 'ramprep-sweat-mode-v1-2'
+const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './pwa-icon.svg', './favicon.svg', './ramrep-logo.svg', './apple-touch-icon.svg']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)))
@@ -42,23 +42,19 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  event.respondWith(
-    caches.match(request).then((cached) => {
-      if (cached) {
-        return cached
-      }
+  if (url.pathname.endsWith('.mp4') || url.hostname.includes('youtube') || url.hostname.includes('youtu.be')) {
+    return
+  }
 
-      return fetch(request)
-        .then((response) => {
-          if (response.ok) {
-            const copy = response.clone()
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
-          }
-          return response
-        })
-        .catch(() => {
-          return new Response('', { status: 503, statusText: 'Offline' })
-        })
-    }),
+  event.respondWith(
+    fetch(request)
+      .then((response) => {
+        if (response.ok) {
+          const copy = response.clone()
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy))
+        }
+        return response
+      })
+      .catch(() => caches.match(request).then((cached) => cached ?? new Response('', { status: 503, statusText: 'Offline' }))),
   )
 })

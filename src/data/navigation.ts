@@ -1,8 +1,8 @@
 export const primaryNavItems = [
   { page: 'dashboard', label: 'Today' },
-  { page: 'log', label: 'Log' },
+  { page: 'train', label: 'Train' },
+  { page: 'ride', label: 'Ride' },
   { page: 'carbs', label: 'Carbs' },
-  { page: 'progress', label: 'Progress' },
   { page: 'more', label: 'More' },
 ] as const
 
