@@ -27,6 +27,13 @@ type UsdaFood = {
   foodNutrients?: UsdaNutrient[]
 }
 
+type UsdaApiErrorBody = {
+  error?: {
+    code?: string
+    message?: string
+  }
+}
+
 const numberValue = (value?: number) => (Number.isFinite(value ?? NaN) ? Number(value) : undefined)
 
 const nutrientName = (nutrient: UsdaNutrient) =>
@@ -50,6 +57,27 @@ const servingSizeForFood = (food: UsdaFood) => {
     return `${food.servingSize}${food.servingSizeUnit}`
   }
   return undefined
+}
+
+export const formatUsdaErrorMessage = (status: number, body?: UsdaApiErrorBody, context = 'lookup') => {
+  if (body?.error?.code === 'API_KEY_INVALID') {
+    return 'USDA rejected this API key. Confirm or rotate it in FoodData Central, then save it again locally.'
+  }
+
+  const message = body?.error?.message?.trim()
+  if (message) {
+    return `USDA ${context} failed (${status}): ${message}`
+  }
+
+  return `USDA ${context} failed (${status}).`
+}
+
+const usdaErrorMessage = async (response: Response, context: string) => {
+  try {
+    return formatUsdaErrorMessage(response.status, (await response.json()) as UsdaApiErrorBody, context)
+  } catch {
+    return formatUsdaErrorMessage(response.status, undefined, context)
+  }
 }
 
 export const parseUsdaFood = (
@@ -114,7 +142,7 @@ export const searchUsdaFoods = async (query: string, options: FoodLookupOptions)
   })
   const response = await fetch(`${USDA_BASE_URL}/foods/search?${params.toString()}`, { signal: options.signal })
   if (!response.ok) {
-    throw new FoodLookupError(`USDA lookup failed (${response.status}).`)
+    throw new FoodLookupError(await usdaErrorMessage(response, 'lookup'))
   }
   const json = (await response.json()) as { foods?: UsdaFood[] }
 
@@ -136,7 +164,7 @@ export const getUsdaFoodDetails = async (
     signal: options.signal,
   })
   if (!response.ok) {
-    throw new FoodLookupError(`USDA detail lookup failed (${response.status}).`)
+    throw new FoodLookupError(await usdaErrorMessage(response, 'detail lookup'))
   }
 
   return parseUsdaFood((await response.json()) as UsdaFood, options)

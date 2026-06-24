@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseUsdaFood } from './usdaFoodDataCentral'
+import { formatUsdaErrorMessage, parseUsdaFood } from './usdaFoodDataCentral'
 
 describe('food lookup adapters', () => {
   it('parses USDA FoodData Central search/detail food nutrients', () => {
@@ -35,5 +35,16 @@ describe('food lookup adapters', () => {
       netCarbs: 19,
       servingWarning: 'Serving data may be ambiguous. Verify the label or serving before adding.',
     })
+  })
+
+  it('turns USDA invalid-key responses into an actionable local settings message', () => {
+    expect(
+      formatUsdaErrorMessage(403, {
+        error: {
+          code: 'API_KEY_INVALID',
+          message: 'An invalid api_key was supplied.',
+        },
+      }),
+    ).toBe('USDA rejected this API key. Confirm or rotate it in FoodData Central, then save it again locally.')
   })
 })
