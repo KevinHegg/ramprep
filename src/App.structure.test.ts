@@ -68,7 +68,8 @@ describe('mobile UI structure', () => {
 
   it('keeps Carbs giant and fast with six meal buttons', () => {
     expect(appSource).toContain('carb-integer-picker')
-    expect(appSource).toContain('Add {carbAmount}g to {carbMealSlotLabels[carbMealSlot]}')
+    expect(appSource).toContain('Add {carbAmount} net carbs to {carbMealSlotLabels[carbMealSlot]}')
+    expect(appSource).toContain('<span className="carb-amount-label">net carbs</span>')
     expect(carbMealSlots.map((slot) => carbMealSlotLabels[slot])).toEqual([
       'Breakfast',
       'AM Snack',
@@ -77,6 +78,14 @@ describe('mobile UI structure', () => {
       'Dinner',
       'Evening',
     ])
+  })
+
+  it('uses USDA result selections to set the Quick Add net-carb amount', () => {
+    const selectLookupBlock = sourceBetween('const handleSelectLookupResult', 'const handleAddLookupCarbs')
+
+    expect(selectLookupBlock).toContain('setCarbAmount(normalizeCarbGrams(detailed.netCarbs))')
+    expect(selectLookupBlock).toContain('setCarbAmount(normalizeCarbGrams(result.netCarbs))')
+    expect(appSource).toContain('{result.netCarbs} net carbs')
   })
 
   it('uses the RampRep default library and keeps downward dog search-only', () => {

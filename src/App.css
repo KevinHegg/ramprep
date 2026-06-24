@@ -1774,7 +1774,7 @@ label > span,
 
 .carb-integer-picker {
   display: grid;
-  grid-template-columns: 64px 64px minmax(0, 1fr) 64px 64px;
+  grid-template-columns: 56px 56px minmax(120px, 1fr) 56px 56px;
   gap: 8px;
   align-items: center;
 }
@@ -1790,10 +1790,26 @@ label > span,
 }
 
 .carb-integer-picker strong {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px 8px;
+  min-width: 0;
   color: var(--text-strong);
-  font-size: clamp(48px, 15vw, 72px);
   line-height: 1;
   text-align: center;
+}
+
+.carb-amount-value {
+  font-size: 48px;
+  font-weight: 950;
+}
+
+.carb-amount-label {
+  font-size: 18px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
 }
 
 .demo-tab-row {

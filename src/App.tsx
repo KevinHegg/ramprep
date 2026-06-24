@@ -1817,9 +1817,13 @@ function App() {
           : result
       setLookupSelected(detailed)
       setLookupOverride(detailed.netCarbs)
+      setCarbAmount(normalizeCarbGrams(detailed.netCarbs))
+      showFlash(`Quick add set to ${detailed.netCarbs} net carbs.`)
     } catch {
       setLookupSelected(result)
       setLookupOverride(result.netCarbs)
+      setCarbAmount(normalizeCarbGrams(result.netCarbs))
+      showFlash(`Quick add set to ${result.netCarbs} net carbs.`)
     } finally {
       setLookupLoading(false)
     }
@@ -3536,13 +3540,16 @@ function App() {
             <div className="carb-integer-picker" aria-label="Net carb integer picker">
               <button type="button" onClick={() => setCarbAmount((value) => normalizeCarbGrams(value - 5))}>-5</button>
               <button type="button" onClick={() => setCarbAmount((value) => normalizeCarbGrams(value - 1))}>-1</button>
-              <strong>{carbAmount}g</strong>
+              <strong>
+                <span className="carb-amount-value">{carbAmount}</span>
+                <span className="carb-amount-label">net carbs</span>
+              </strong>
               <button type="button" onClick={() => setCarbAmount((value) => normalizeCarbGrams(value + 1))}>+1</button>
               <button type="button" onClick={() => setCarbAmount((value) => normalizeCarbGrams(value + 5))}>+5</button>
             </div>
             <button className="primary-button" type="button" onClick={() => void handleAddManualCarbs()}>
               <Plus aria-hidden="true" size={18} />
-              Add {carbAmount}g to {carbMealSlotLabels[carbMealSlot]}
+              Add {carbAmount} net carbs to {carbMealSlotLabels[carbMealSlot]}
             </button>
           </Card>
 
@@ -3712,7 +3719,7 @@ function App() {
                         {result.servingSize ?? 'serving unclear'}
                       </small>
                     </span>
-                    <b>{result.netCarbs}g</b>
+                    <b>{result.netCarbs} net carbs</b>
                   </button>
                 ))}
               </div>
