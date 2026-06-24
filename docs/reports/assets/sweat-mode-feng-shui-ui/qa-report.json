@@ -23,5 +23,14 @@
     "lint": "npm run lint - passed",
     "tests": "npm test -- --run - 13 files, 53 tests passed",
     "build": "npm run build - passed"
+  },
+  "deployment": {
+    "branch": "feat/sweat-mode-feng-shui-ui",
+    "main_commit": "450a7a3",
+    "workflow_run": "28068821889",
+    "workflow_url": "https://github.com/KevinHegg/ramprep/actions/runs/28068821889",
+    "pages_url": "https://kevinhegg.github.io/ramprep/",
+    "status": "succeeded",
+    "live_smoke": "passed: Today heading, five-item nav, Train today, Ride, and no horizontal overflow at 390px"
   }
 }
