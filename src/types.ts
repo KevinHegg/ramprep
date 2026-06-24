@@ -306,7 +306,7 @@ export interface ExerciseMedia {
   isTrusted: boolean
 }
 
-export type ExerciseDemoMediaKind = 'youtubeEmbed' | 'externalVideo' | 'externalHowTo' | 'wgerMedia' | 'freeExerciseDbImage' | 'none'
+export type ExerciseDemoMediaKind = 'youtubeEmbed' | 'externalVideo' | 'externalHowTo' | 'checklist' | 'wgerMedia' | 'freeExerciseDbImage' | 'none'
 export type ExerciseDemoMediaQualityStatus = 'verified' | 'needsReview' | 'rejected'
 
 export interface ExerciseDemoMedia {

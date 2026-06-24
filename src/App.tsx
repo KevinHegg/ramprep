@@ -71,7 +71,14 @@ import {
   updateCarbEntry,
   updateWorkoutLog,
 } from './data/repository'
-import { getExerciseDemoMedia, isVerifiedDemoMedia, isVerifiedVideoDemoMedia } from './data/exerciseDemoCatalog'
+import {
+  getExerciseDemoMedia,
+  isChecklistDemoMedia,
+  isVerifiedDemoMedia,
+  isVerifiedVideoDemoMedia,
+  learningActionForDemoMedia,
+} from './data/exerciseDemoCatalog'
+import { mediaCoverageRows, type MediaCoverageRow } from './data/mediaCoverageMatrix'
 import { primaryNavItems } from './data/navigation'
 import {
   isDefaultLibraryExercise,
@@ -214,7 +221,7 @@ const rideTemplateOptions: RideTemplate[] = ['Start ride log', 'Hill repeats', '
 const walkTemplates = new Set<RideTemplate>(['Commute walk', 'Dog walk'])
 const ruckTemplates = new Set<RideTemplate>(['Ruck walk', 'Ruck commute'])
 
-const landmarkWords = ['hands', 'feet', 'hips', 'ribs', 'knees', 'shoulders', 'spine', 'breath']
+const landmarkWords = ['hands', 'feet', 'hips', 'ribs', 'knees', 'shoulders', 'spine', 'breath', 'load', 'eyes']
 
 const skipReasons: SkipReason[] = ['work', 'travel', 'fatigue', 'soreness', 'illness', 'no time', 'other']
 const equipmentKinds: EquipmentKind[] = ['bodyweight', 'dumbbell', 'kettlebell', 'band', 'yoga mat', 'carry', 'bike', 'trailer', 'chair', 'bench', 'rucksack', 'foam roller', 'suspension trainer', 'pull-up bar']
@@ -627,21 +634,37 @@ const ExerciseDemoButton = ({
   exercise,
   onOpen,
   compact = false,
+  allowLocalFallback = false,
 }: {
   exercise: Exercise
   onOpen: (id: string, launcher?: HTMLElement) => void
   compact?: boolean
+  allowLocalFallback?: boolean
 }) => {
   const media = getExerciseDemoMedia(exercise.id)
   const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
-  const label = isVerifiedVideoDemoMedia(verifiedMedia) ? 'Watch' : verifiedMedia ? 'Read how-to' : 'Demo needed'
+  const label = learningActionForDemoMedia(verifiedMedia, { allowLocalFallback })
   const iconSize = compact ? 16 : 18
+  const Icon = label === 'Checklist' ? CheckCircle2 : CircleHelp
 
   if (!verifiedMedia) {
+    if (allowLocalFallback) {
+      return (
+        <button
+          className={compact ? 'demo-button compact' : 'demo-button'}
+          type="button"
+          onClick={(event) => onOpen(exercise.id, event.currentTarget)}
+        >
+          <CircleHelp aria-hidden="true" size={iconSize} />
+          <span>{label}</span>
+        </button>
+      )
+    }
+
     return (
-      <span className={compact ? 'demo-button compact disabled' : 'demo-button disabled'} aria-disabled="true">
+      <span className={compact ? 'demo-status-text compact' : 'demo-status-text'} aria-label={`${exercise.name} needs demo review`}>
         <CircleHelp aria-hidden="true" size={iconSize} />
-        <span>{label}</span>
+        <span>Needs review</span>
       </span>
     )
   }
@@ -660,10 +683,27 @@ const ExerciseDemoButton = ({
         onOpen(exercise.id, event.currentTarget)
       }}
     >
-      <CircleHelp aria-hidden="true" size={iconSize} />
+      <Icon aria-hidden="true" size={iconSize} />
       <span>{label}</span>
     </button>
   )
+}
+
+const exerciseDemoStatusText = (exercise: Exercise) => {
+  const media = getExerciseDemoMedia(exercise.id)
+  const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
+  const action = learningActionForDemoMedia(verifiedMedia)
+
+  if (action === 'Watch') {
+    return 'Video demo ready'
+  }
+  if (action === 'Read') {
+    return 'Direct article ready'
+  }
+  if (action === 'Checklist') {
+    return 'Checklist ready'
+  }
+  return 'Needs review'
 }
 
 const ExerciseDemoView = ({
@@ -679,10 +719,13 @@ const ExerciseDemoView = ({
 }) => {
   const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
   const hasVideo = isVerifiedVideoDemoMedia(verifiedMedia)
-  const sourceHref = verifiedMedia?.sourcePageUrl ?? verifiedMedia?.url ?? exercise.sourceReferences?.[0]?.url
+  const hasChecklist = isChecklistDemoMedia(verifiedMedia)
+  const hasSourceTab = Boolean(verifiedMedia)
+  const sourceHref = verifiedMedia?.sourcePageUrl ?? verifiedMedia?.url
   const [demoTab, setDemoTab] = useState<'watch' | 'do' | 'mistakes' | 'source'>(hasVideo ? 'watch' : 'do')
   const demoSteps = exercise.instructions.slice(0, 5).map(landmarkStep)
   const demoMistakes = exercise.commonMistakes.slice(0, 5)
+  const sourceActionLabel = verifiedMedia?.kind === 'youtubeEmbed' ? 'Open in YouTube' : verifiedMedia?.kind === 'externalVideo' ? 'Open video' : 'Open source'
 
   return (
     <section className="exercise-demo-view" role="dialog" aria-modal="true" aria-labelledby="demo-title">
@@ -698,54 +741,12 @@ const ExerciseDemoView = ({
       </header>
 
       <main className="demo-view-body">
-        <div className="demo-media-panel">
-          {verifiedMedia?.kind === 'youtubeEmbed' && verifiedMedia.embedUrl ? (
-            <>
-              <iframe
-                title={verifiedMedia.title}
-                src={verifiedMedia.embedUrl}
-                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-              <a className="ghost-button" href={verifiedMedia.url} target="_blank" rel="noreferrer">
-                <ExternalLink aria-hidden="true" size={18} />
-                Open in YouTube
-              </a>
-            </>
-          ) : verifiedMedia?.kind === 'externalVideo' ? (
-            <div className="verified-link-panel">
-              <p className="eyebrow">Verified external video</p>
-              <h3>{verifiedMedia.title}</h3>
-              <p>{verifiedMedia.attributionText}</p>
-              <a className="primary-button" href={verifiedMedia.url} target="_blank" rel="noreferrer">
-                <ExternalLink aria-hidden="true" size={18} />
-                Open video
-              </a>
-            </div>
-          ) : verifiedMedia?.kind === 'externalHowTo' ? (
-            <div className="verified-link-panel">
-              <p className="eyebrow">Verified external how-to</p>
-              <h3>{verifiedMedia.title}</h3>
-              <p>{verifiedMedia.attributionText}</p>
-              <a className="primary-button" href={verifiedMedia.url} target="_blank" rel="noreferrer">
-                <ExternalLink aria-hidden="true" size={18} />
-                Open source
-              </a>
-            </div>
-          ) : (
-            <div className="no-demo-panel">
-              <p className="eyebrow">Media status</p>
-              <h3>Demo needs review</h3>
-              <p>This exercise needs a reviewed source before RampRep embeds or imports motion media.</p>
-              {sourceHref && (
-                <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
-                  <ExternalLink aria-hidden="true" size={18} />
-                  Review source
-                </a>
-              )}
-            </div>
-          )}
-        </div>
+        {!verifiedMedia && (
+          <div className="demo-review-notice">
+            <CircleHelp aria-hidden="true" size={18} />
+            <span>Demo needs review. Local coaching is still available below.</span>
+          </div>
+        )}
 
         <div className="demo-tab-row" role="tablist" aria-label="Exercise demo details">
           {hasVideo && (
@@ -759,7 +760,7 @@ const ExerciseDemoView = ({
           <button className={demoTab === 'mistakes' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'mistakes'} onClick={() => setDemoTab('mistakes')}>
             Mistakes
           </button>
-          {!hasVideo && (
+          {hasSourceTab && (
             <button className={demoTab === 'source' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'source'} onClick={() => setDemoTab('source')}>
               Source
             </button>
@@ -767,10 +768,25 @@ const ExerciseDemoView = ({
         </div>
 
         {demoTab === 'watch' && hasVideo && (
-          <div className="demo-section demo-glance-panel">
+          <div className="demo-section demo-glance-panel demo-watch-panel">
             <p className="eyebrow">Watch</p>
             <h3>{verifiedMedia?.title ?? 'Demo needs review'}</h3>
-            <p>{exercise.purpose ?? exercise.description}</p>
+            {verifiedMedia?.kind === 'youtubeEmbed' && verifiedMedia.embedUrl ? (
+              <iframe
+                title={verifiedMedia.title}
+                src={verifiedMedia.embedUrl}
+                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+            ) : (
+              <p>{verifiedMedia?.attributionText}</p>
+            )}
+            {sourceHref && (
+              <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
+                <ExternalLink aria-hidden="true" size={18} />
+                {sourceActionLabel}
+              </a>
+            )}
             <div className="demo-meta">
               <span className="tag">{rampRepGroupForExercise(exercise)}</span>
               <span className="tag">{exercise.difficulty}</span>
@@ -781,13 +797,26 @@ const ExerciseDemoView = ({
         {demoTab === 'do' && (
           <div className="demo-section demo-glance-panel">
             <p className="eyebrow">Do</p>
-            <h3>{exercise.setup ?? 'Start tall and choose a clean range.'}</h3>
+            <p className="demo-purpose">{exercise.purpose ?? exercise.description}</p>
+            <h3>Setup</h3>
+            <p>{exercise.setup ?? 'Choose a stable start and a range you can control.'}</p>
             <ol className="demo-big-list">
               {demoSteps.map((step, stepIndex) => (
                 <li key={`${exercise.id}-step-${stepIndex}`}>{step}</li>
               ))}
             </ol>
             <p className="demo-dose">{exercise.dose ?? prescription({ id: 'demo', routineId: 'demo', exerciseId: exercise.id, section: 'main', order: 1 }, exercise)}</p>
+            {hasChecklist && <p className="demo-checklist-note">Use this as the session checklist, then log distance, load, effort, or notes from the workout screen.</p>}
+            {exercise.safety?.length ? (
+              <div className="demo-stop-list">
+                <h3>Stop if</h3>
+                <ul>
+                  {exercise.safety.slice(0, 3).map((item, itemIndex) => (
+                    <li key={`${exercise.id}-safety-${itemIndex}`}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         )}
 
@@ -827,13 +856,25 @@ const ExerciseDemoView = ({
           <div className="demo-section demo-glance-panel">
             <p className="eyebrow">Source</p>
             <h3>{verifiedMedia?.title ?? 'No direct source attached'}</h3>
+            <div className="demo-source-facts">
+              <span>
+                Provider <strong>{verifiedMedia?.provider ?? 'RampRep review queue'}</strong>
+              </span>
+              <span>
+                Reviewed <strong>{verifiedMedia?.reviewedAtISO?.slice(0, 10) ?? 'pending'}</strong>
+              </span>
+              <span>
+                Type <strong>{hasChecklist ? 'Checklist' : hasVideo ? 'Video' : 'Article'}</strong>
+              </span>
+            </div>
             <p>{verifiedMedia?.attributionText ?? 'RampRep has local instructions, but no reviewed exercise-specific external source yet.'}</p>
             {sourceHref && (
               <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
                 <ExternalLink aria-hidden="true" size={18} />
-                Open source
+                {sourceActionLabel}
               </a>
             )}
+            {!sourceHref && hasChecklist && <p className="demo-checklist-note">This is a local checklist source with no external media link.</p>}
           </div>
         )}
 
@@ -853,14 +894,72 @@ const ExerciseDemoView = ({
           <ArrowLeft aria-hidden="true" size={18} />
           Back
         </button>
-        {sourceHref && (
-          <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
-            <ExternalLink aria-hidden="true" size={18} />
-            Open source
-          </a>
-        )}
       </footer>
     </section>
+  )
+}
+
+const MediaCoveragePanel = ({ onFlash }: { onFlash: (message: string) => void }) => {
+  const copyJson = async (row: MediaCoverageRow, override?: Partial<MediaCoverageRow>) => {
+    const payload = { ...row, ...override }
+    await navigator.clipboard?.writeText(JSON.stringify(payload, null, 2))
+    onFlash(override?.status === 'needsReview' ? 'Needs-review media row copied.' : 'Media row JSON copied.')
+  }
+
+  return (
+    <Card className="media-coverage-card">
+      <div className="section-title">
+        <div>
+          <p className="eyebrow">Media coverage</p>
+          <h2>Demo QA matrix</h2>
+        </div>
+        <span className="tag">{mediaCoverageRows.length} rows</span>
+      </div>
+      <div className="media-coverage-grid" role="table" aria-label="Exercise media coverage matrix">
+        {mediaCoverageRows.map((row) => (
+          <div className="media-coverage-row" role="row" key={row.exerciseId}>
+            <div>
+              <strong>{row.exerciseName}</strong>
+              <span>{row.defaultVisible ? 'Default visible' : 'Optional/search-only'}</span>
+            </div>
+            <div>
+              <span>{row.sourceType}</span>
+              <strong>{row.provider}</strong>
+            </div>
+            <div>
+              <span>{row.behavior}</span>
+              <strong>{row.status}</strong>
+            </div>
+            <div>
+              <span>Reviewed {row.reviewedAtISO ? row.reviewedAtISO.slice(0, 10) : 'pending'}</span>
+              <small>{row.directUrl || row.statusReason}</small>
+            </div>
+            <div className="media-coverage-actions">
+              {row.directUrl ? (
+                <a className="ghost-button compact-cta" href={row.directUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink aria-hidden="true" size={16} />
+                  Open source
+                </a>
+              ) : (
+                <span className="demo-status-text compact">Local checklist</span>
+              )}
+              <button
+                className="ghost-button compact-cta"
+                type="button"
+                onClick={() => void copyJson(row, { status: 'needsReview', statusReason: `QA marked for review from ${row.status}.` })}
+              >
+                <CircleHelp aria-hidden="true" size={16} />
+                Mark needs review
+              </button>
+              <button className="ghost-button compact-cta" type="button" onClick={() => void copyJson(row)}>
+                <Copy aria-hidden="true" size={16} />
+                Copy JSON
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
   )
 }
 
@@ -2048,7 +2147,7 @@ function App() {
             <strong className="active-target">{activeWorkoutTarget || 'Open set'}</strong>
             {activeWorkoutEntry.lastSummary && <p className="last-summary">{activeWorkoutEntry.lastSummary}</p>}
             <div className="active-demo-row">
-              {activeWorkoutExercise && <ExerciseDemoButton exercise={activeWorkoutExercise} onOpen={openExerciseDemo} />}
+              {activeWorkoutExercise && <ExerciseDemoButton exercise={activeWorkoutExercise} onOpen={openExerciseDemo} allowLocalFallback />}
             </div>
           </section>
 
@@ -2417,6 +2516,7 @@ function App() {
             </div>
             <p className="notice">Edit, reorder, duplicate, seed, and debug controls stay hidden until edit mode is on.</p>
           </Card>
+          {editMode && <MediaCoveragePanel onFlash={showFlash} />}
         </main>
       )}
 
@@ -2786,7 +2886,7 @@ function App() {
                         <span className="tag">{rampRepGroupForExercise(exercise)}</span>
                         <h2>{exercise.name}</h2>
                         <p>{exercise.purpose ?? exercise.description}</p>
-                        <small>{isVerifiedDemoMedia(getExerciseDemoMedia(exercise.id)) ? 'Verified source attached' : 'No verified demo yet'}</small>
+                        <small>{exerciseDemoStatusText(exercise)}</small>
                       </div>
                     </div>
                     <div className="card-actions compact">

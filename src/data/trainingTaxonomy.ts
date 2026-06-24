@@ -19,6 +19,7 @@ export const optionalSearchOnlyExerciseIds = new Set([
   'sphinx-pose',
   'cobra-pose',
   'childs-pose-side-reach',
+  'rear-foot-elevated-split-squat',
 ])
 
 export const defaultLibraryExerciseGroups: Record<SweatModeLibraryGroup, string[]> = {

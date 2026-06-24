@@ -64,11 +64,13 @@ export const priorityExerciseIds = [
   'controlled-trailer-towing-workout',
   'trailer-walk',
   'trailer-hill-starts',
+  'loaded-carry-for-trailer-days',
+  'easy-tour-specificity-session',
 ] as const
 
 export type PriorityExerciseId = (typeof priorityExerciseIds)[number]
 
-export type ExerciseMediaSourceKind = 'youtubeVideo' | 'externalVideo' | 'externalArticle' | 'none'
+export type ExerciseMediaSourceKind = 'youtubeVideo' | 'externalVideo' | 'externalArticle' | 'checklist' | 'none'
 export type ExerciseMediaQualityStatus = 'verified' | 'needsReview' | 'rejected'
 
 export interface ExerciseMediaSource {
@@ -89,6 +91,7 @@ export interface ExerciseMediaSource {
   attributionText: string
   licenseNote: string
   isDefaultLearningSource: boolean
+  lastCheckedAtISO: string
 }
 
 const youtubeEmbed = (videoId: string) => `https://www.youtube.com/embed/${videoId}?controls=1&playsinline=1&rel=0`
@@ -116,6 +119,7 @@ const youtubeSource = (
   attributionText: `Video linked and embedded from ${channelName} on YouTube. RampRep does not download, cache, or rehost the video.`,
   licenseNote: 'Linked/embedded only; creator/platform terms apply',
   isDefaultLearningSource: true,
+  lastCheckedAtISO: demoCatalogReviewedAtISO,
 })
 
 const articleSource = (
@@ -137,6 +141,7 @@ const articleSource = (
   attributionText: `External how-to reference from ${provider}. RampRep links out and paraphrases its own instructions.`,
   licenseNote: 'Linked only; provider terms apply',
   isDefaultLearningSource: true,
+  lastCheckedAtISO: demoCatalogReviewedAtISO,
 })
 
 const externalVideoSource = (
@@ -158,6 +163,28 @@ const externalVideoSource = (
   attributionText: `External video reference from ${provider}. RampRep opens the source in a new tab.`,
   licenseNote: 'Linked only; provider terms apply',
   isDefaultLearningSource: true,
+  lastCheckedAtISO: demoCatalogReviewedAtISO,
+})
+
+const checklistSource = (
+  exerciseId: PriorityExerciseId,
+  title: string,
+  statusReason = 'RampRep local checklist reviewed for purpose, setup, safety, dose, and logging. No external media is shown for this item.',
+): ExerciseMediaSource => ({
+  id: `media-${exerciseId}-ramprep-checklist`,
+  exerciseId,
+  sourceKind: 'checklist',
+  provider: 'RampRep checklist',
+  title,
+  directUrl: '',
+  reviewedBy: demoCatalogReviewer,
+  reviewedAtISO: demoCatalogReviewedAtISO,
+  qualityStatus: 'verified',
+  statusReason,
+  attributionText: 'Local RampRep checklist. No third-party media is embedded, copied, cached, or downloaded.',
+  licenseNote: 'Original RampRep coaching checklist',
+  isDefaultLearningSource: true,
+  lastCheckedAtISO: demoCatalogReviewedAtISO,
 })
 
 const needsReviewSource = (
@@ -178,6 +205,7 @@ const needsReviewSource = (
   attributionText: 'No reviewed in-app motion demo yet. This exercise will not show a Watch button until a direct source is approved.',
   licenseNote: 'No external media attached.',
   isDefaultLearningSource: false,
+  lastCheckedAtISO: demoCatalogReviewedAtISO,
 })
 
 export const exerciseMediaSources: ExerciseMediaSource[] = [
@@ -194,55 +222,57 @@ export const exerciseMediaSources: ExerciseMediaSource[] = [
   youtubeSource('dead-bug', 'How To Do a Dead Bug Exercise', 'xtTIb6dC-vI', 'AskDoctorJo'),
   youtubeSource('one-arm-dumbbell-row', 'DB One Arm Row Exercise Library', '2AUbzsDCgaQ', 'Exercise Library'),
   externalVideoSource('step-up', 'Step-up Exercise', 'Mayo Clinic', 'https://www.mayoclinic.org/healthy-lifestyle/fitness/multimedia/step-up/vid-20084661'),
-  needsReviewSource('cat-cow', 'Cat-Cow'),
+  checklistSource('cat-cow', 'Cat-Cow checklist'),
   needsReviewSource('childs-pose-side-reach', "Child's Pose With Side Reach"),
-  needsReviewSource('low-lunge-hip-flexor-stretch', 'Low Lunge Hip-Flexor Stretch'),
-  needsReviewSource('figure-four-stretch', 'Figure-Four Stretch'),
-  needsReviewSource('hamstring-stretch', 'Hamstring Stretch'),
-  needsReviewSource('thoracic-open-book', 'Thoracic Open Book'),
+  checklistSource('low-lunge-hip-flexor-stretch', 'Low Lunge Hip-Flexor Stretch checklist'),
+  checklistSource('figure-four-stretch', 'Figure-Four Stretch checklist'),
+  checklistSource('hamstring-stretch', 'Hamstring Stretch checklist'),
+  checklistSource('thoracic-open-book', 'Thoracic Open Book checklist'),
   needsReviewSource('sphinx-pose', 'Sphinx Pose'),
   needsReviewSource('cobra-pose', 'Cobra Pose'),
-  needsReviewSource('couch-stretch', 'Couch Stretch'),
-  needsReviewSource('ankle-rocks', 'Ankle Dorsiflexion Rocks'),
-  needsReviewSource('kettlebell-deadlift', 'Kettlebell Deadlift'),
-  needsReviewSource('dumbbell-romanian-deadlift', 'Dumbbell Romanian Deadlift'),
-  needsReviewSource('split-squat', 'Split Squat'),
-  needsReviewSource('reverse-lunge', 'Reverse Lunge'),
-  needsReviewSource('band-pull-apart', 'Band Pull-Apart'),
-  needsReviewSource('band-face-pull', 'Band Face Pull'),
-  needsReviewSource('band-external-rotation', 'Band External Rotation'),
-  needsReviewSource('prone-y-t-w', 'Prone Y-T-W'),
+  checklistSource('couch-stretch', 'Couch Stretch checklist'),
+  checklistSource('ankle-rocks', 'Ankle Dorsiflexion Rocks checklist'),
+  checklistSource('kettlebell-deadlift', 'Kettlebell Deadlift checklist'),
+  checklistSource('dumbbell-romanian-deadlift', 'Dumbbell Romanian Deadlift checklist'),
+  checklistSource('split-squat', 'Split Squat checklist'),
+  checklistSource('reverse-lunge', 'Reverse Lunge checklist'),
+  checklistSource('band-pull-apart', 'Band Pull-Apart checklist'),
+  checklistSource('band-face-pull', 'Band Face Pull checklist'),
+  checklistSource('band-external-rotation', 'Band External Rotation checklist'),
+  checklistSource('prone-y-t-w', 'Prone Y-T-W checklist'),
   needsReviewSource('push-up', 'Push-Up'),
   needsReviewSource('dumbbell-floor-press', 'Dumbbell Floor Press'),
-  needsReviewSource('bench-hip-thrust', 'Bench Hip Thrust'),
-  needsReviewSource('bench-supported-rear-delt-raise', 'Bench-Supported Rear Delt Raise'),
-  needsReviewSource('step-up-to-bench', 'Step-Up to Bench', 'Requires the user to mark the portable bench safe for step-ups before it appears as a training option.'),
-  needsReviewSource('farmer-carry', 'Farmer Carry'),
-  needsReviewSource('suitcase-carry', 'Suitcase Carry'),
-  needsReviewSource('glute-bridge-march', 'Glute Bridge March'),
-  needsReviewSource('pallof-press', 'Pallof Press'),
-  needsReviewSource('mcgill-curl-up', 'McGill Curl-Up'),
-  needsReviewSource('calf-raise', 'Calf Raise'),
-  needsReviewSource('soleus-raise', 'Soleus Raise'),
-  needsReviewSource('tibialis-raise', 'Tibialis Raise'),
-  needsReviewSource('wall-sit', 'Wall Sit'),
-  needsReviewSource('single-leg-romanian-deadlift', 'Single-Leg Romanian Deadlift'),
-  needsReviewSource('easy-endurance-ride', 'Easy Endurance Ride'),
-  needsReviewSource('recovery-spin', 'Recovery Spin'),
-  needsReviewSource('hill-repeat-ride', 'Hill Repeat Ride'),
-  needsReviewSource('low-cadence-climb-intervals', 'Low-Cadence Climb Intervals'),
-  needsReviewSource('loaded-gravel-ride', 'Loaded Gravel Ride'),
-  needsReviewSource('commute-walk', 'Commute Walk'),
-  needsReviewSource('dog-walk', 'Dog Walk'),
-  needsReviewSource('dog-walk-light-ruck', 'Dog Walk With Light Ruck'),
-  needsReviewSource('hydration-ruck-walk', 'Hydration Ruck Walk'),
-  needsReviewSource('ruck-commute', 'Ruck Commute'),
-  needsReviewSource('easy-posture-ruck', 'Easy Posture Ruck'),
-  needsReviewSource('ruck-hill-walk', 'Ruck Hill Walk'),
-  needsReviewSource('burley-loaded-trailer-ride', 'Burley Loaded Trailer Ride'),
-  needsReviewSource('controlled-trailer-towing-workout', 'Controlled Trailer Towing Workout'),
-  needsReviewSource('trailer-walk', 'Trailer Walk'),
-  needsReviewSource('trailer-hill-starts', 'Trailer Hill Starts'),
+  checklistSource('bench-hip-thrust', 'Bench Hip Thrust checklist'),
+  checklistSource('bench-supported-rear-delt-raise', 'Bench-Supported Rear Delt Raise checklist'),
+  checklistSource('step-up-to-bench', 'Step-Up to Bench checklist', 'Local bench-safety checklist only. This exercise stays hidden until the portable bench is marked safe for step-ups.'),
+  checklistSource('farmer-carry', 'Farmer Carry checklist'),
+  checklistSource('suitcase-carry', 'Suitcase Carry checklist'),
+  checklistSource('glute-bridge-march', 'Glute Bridge March checklist'),
+  checklistSource('pallof-press', 'Pallof Press checklist'),
+  checklistSource('mcgill-curl-up', 'McGill Curl-Up checklist'),
+  checklistSource('calf-raise', 'Calf Raise checklist'),
+  checklistSource('soleus-raise', 'Soleus Raise checklist'),
+  checklistSource('tibialis-raise', 'Tibialis Raise checklist'),
+  checklistSource('wall-sit', 'Wall Sit checklist'),
+  checklistSource('single-leg-romanian-deadlift', 'Single-Leg Romanian Deadlift checklist'),
+  checklistSource('easy-endurance-ride', 'Easy Endurance Ride checklist'),
+  checklistSource('recovery-spin', 'Recovery Spin checklist'),
+  checklistSource('hill-repeat-ride', 'Hill Repeat Ride checklist'),
+  checklistSource('low-cadence-climb-intervals', 'Low-Cadence Climb Intervals checklist'),
+  checklistSource('loaded-gravel-ride', 'Loaded Gravel Ride checklist'),
+  checklistSource('commute-walk', 'Commute Walk checklist'),
+  checklistSource('dog-walk', 'Dog Walk checklist'),
+  checklistSource('dog-walk-light-ruck', 'Dog Walk With Light Ruck checklist'),
+  checklistSource('hydration-ruck-walk', 'Hydration Ruck Walk checklist'),
+  checklistSource('ruck-commute', 'Ruck Commute checklist'),
+  checklistSource('easy-posture-ruck', 'Easy Posture Ruck checklist'),
+  checklistSource('ruck-hill-walk', 'Ruck Hill Walk checklist'),
+  checklistSource('burley-loaded-trailer-ride', 'Burley Loaded Trailer Ride checklist'),
+  checklistSource('controlled-trailer-towing-workout', 'Controlled Trailer Towing Workout checklist'),
+  checklistSource('trailer-walk', 'Trailer Walk checklist'),
+  checklistSource('trailer-hill-starts', 'Trailer Hill Starts checklist'),
+  checklistSource('loaded-carry-for-trailer-days', 'Loaded Carry for Trailer Days checklist'),
+  checklistSource('easy-tour-specificity-session', 'Easy Tour Specificity Session checklist'),
 ]
 
 export const verifiedExerciseSources = exerciseMediaSources
@@ -254,7 +284,10 @@ export const genericSourceUrlPatterns = [
   /^https:\/\/www\.nasm\.org\/resource-center\/exercise-library\/?$/i,
   /^https:\/\/www\.yogajournal\.com\/poses\/?$/i,
   /^https:\/\/www\.youtube\.com\/results/i,
+  /search_query=/i,
+  /^https:\/\/www\.google\.com\/search/i,
   /^https:\/\/www\.youtube\.com\/?$/i,
+  /^https:\/\/www\.youtube\.com\/channel\/[^/?#]+\/?$/i,
   /^https:\/\/wger\.de\/en\/exercise\/overview\/?$/i,
 ]
 

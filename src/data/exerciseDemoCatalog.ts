@@ -23,6 +23,9 @@ const kindForSource = (source: ExerciseMediaSource): ExerciseDemoMedia['kind'] =
   if (source.sourceKind === 'externalArticle') {
     return 'externalHowTo'
   }
+  if (source.sourceKind === 'checklist') {
+    return 'checklist'
+  }
   return 'none'
 }
 
@@ -54,6 +57,27 @@ export const isVerifiedDemoMedia = (media?: ExerciseDemoMedia) =>
 
 export const isVerifiedVideoDemoMedia = (media?: ExerciseDemoMedia) =>
   Boolean(isVerifiedDemoMedia(media) && (media?.kind === 'youtubeEmbed' || media?.kind === 'externalVideo'))
+
+export const isVerifiedArticleDemoMedia = (media?: ExerciseDemoMedia) =>
+  Boolean(isVerifiedDemoMedia(media) && media?.kind === 'externalHowTo')
+
+export const isChecklistDemoMedia = (media?: ExerciseDemoMedia) =>
+  Boolean(isVerifiedDemoMedia(media) && media?.kind === 'checklist')
+
+export type DemoLearningAction = 'Watch' | 'Read' | 'Checklist' | 'How' | 'Needs review'
+
+export const learningActionForDemoMedia = (media?: ExerciseDemoMedia, options: { allowLocalFallback?: boolean } = {}): DemoLearningAction => {
+  if (isVerifiedVideoDemoMedia(media)) {
+    return 'Watch'
+  }
+  if (isVerifiedArticleDemoMedia(media)) {
+    return 'Read'
+  }
+  if (isChecklistDemoMedia(media)) {
+    return 'Checklist'
+  }
+  return options.allowLocalFallback ? 'How' : 'Needs review'
+}
 
 export const verifiedExerciseDemoMedia = exerciseDemoCatalog.filter(isVerifiedDemoMedia)
 export const needsReviewExerciseDemoMedia = exerciseDemoCatalog.filter((media) => media.qualityStatus === 'needsReview')

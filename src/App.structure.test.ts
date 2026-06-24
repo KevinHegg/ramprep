@@ -21,11 +21,14 @@ describe('mobile UI structure', () => {
     expect(cssSource).toContain('.exercise-demo-view')
     expect(cssSource).toContain('position: fixed')
     expect(cssSource).toContain('inset: 0')
-    expect(cssSource).toContain('width: 100vw')
+    expect(cssSource).toContain('width: 100%')
     expect(cssSource).toContain('min-height: 100dvh')
+    expect(cssSource).toContain('grid-template-rows: auto 1fr auto')
     expect(cssSource).toContain('.demo-view-header')
     expect(cssSource).toContain('.demo-view-footer')
+    expect(cssSource).toContain('min-height: 72px')
     expect(cssSource).toContain('position: sticky')
+    expect(cssSource).not.toContain('.demo-view-footer .ghost-button:last-child')
     expect(cssSource).not.toContain('.demo-sheet')
   })
 
@@ -115,7 +118,12 @@ describe('mobile UI structure', () => {
     expect(appSource).toContain('Demo needs review')
     expect(appSource).toContain('demo-tab-row')
     expect(appSource).toContain('Watch')
+    expect(appSource).toContain('Read')
+    expect(appSource).toContain('Checklist')
     expect(appSource).toContain('Mistakes')
+    expect(appSource).toContain('MediaCoveragePanel')
+    expect(appSource).toContain('editMode && <MediaCoveragePanel')
+    expect(appSource).not.toContain('Demo needed')
   })
 
   it('keeps the PWA deployable under /ramprep/ with an update prompt', () => {

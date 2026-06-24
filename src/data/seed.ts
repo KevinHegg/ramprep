@@ -117,9 +117,9 @@ const quickExerciseGuidance = (
   if (group === 'Mobility & Yoga') {
     return {
       instructions: [
-        'Move into a comfortable stretch or mobility position without forcing end range.',
-        'Breathe slowly and let the target area relax before increasing range.',
-        'Ease out of the position gradually and repeat on the other side when needed.',
+        'Hips, ribs, or shoulders settle into the easiest range that reaches the target area.',
+        'Breath stays slow while the target area relaxes before any extra range.',
+        'Spine exits the position gradually before switching sides or standing up.',
       ],
       formCues: ['Slow nasal breaths', 'No pinching', 'Gentle pressure', 'Control the exit'],
       commonMistakes: ['Bouncing', 'Chasing pain', 'Holding the breath', 'Letting joints collapse'],

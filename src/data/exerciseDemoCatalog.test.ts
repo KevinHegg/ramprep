@@ -4,6 +4,7 @@ import {
   getExerciseDemoMedia,
   isVerifiedDemoMedia,
   isVerifiedVideoDemoMedia,
+  learningActionForDemoMedia,
   needsReviewExerciseDemoMedia,
   priorityExerciseIds,
 } from './exerciseDemoCatalog'
@@ -14,7 +15,7 @@ import {
   verifiedExerciseSources,
 } from './verifiedExerciseSources'
 import { seedExercises } from './seed'
-import { defaultLibraryExerciseIds } from './trainingTaxonomy'
+import { defaultLibraryExerciseIds, optionalSearchOnlyExerciseIds } from './trainingTaxonomy'
 
 describe('exercise demo catalog', () => {
   it('has a catalog entry for every priority exercise', () => {
@@ -31,11 +32,11 @@ describe('exercise demo catalog', () => {
   })
 
   it('shows missing media as needing review', () => {
-    const tibialisRaise = getExerciseDemoMedia('tibialis-raise')
+    const sphinxPose = getExerciseDemoMedia('sphinx-pose')
 
-    expect(tibialisRaise?.qualityStatus).toBe('needsReview')
-    expect(isVerifiedDemoMedia(tibialisRaise)).toBe(false)
-    expect(tibialisRaise?.attributionText).toContain('No reviewed in-app motion demo yet')
+    expect(sphinxPose?.qualityStatus).toBe('needsReview')
+    expect(isVerifiedDemoMedia(sphinxPose)).toBe(false)
+    expect(sphinxPose?.attributionText).toContain('No reviewed in-app motion demo yet')
     expect(needsReviewExerciseDemoMedia.length).toBeGreaterThan(0)
   })
 
@@ -44,14 +45,15 @@ describe('exercise demo catalog', () => {
 
     expect(priorityExerciseIds.every((exerciseId) => sourceIds.has(exerciseId))).toBe(true)
     expect(verifiedExerciseDemoSources.every((source) => source.qualityStatus === 'verified')).toBe(true)
-    expect(needsReviewExerciseSources.some((source) => source.exerciseId === 'tibialis-raise')).toBe(true)
+    expect(needsReviewExerciseSources.some((source) => source.exerciseId === 'sphinx-pose')).toBe(true)
   })
 
   it('uses direct source URLs and never generic provider/search roots for verified sources', () => {
     const verifiedSources = verifiedExerciseSources.filter((source) => source.qualityStatus === 'verified')
+    const linkedSources = verifiedSources.filter((source) => source.sourceKind !== 'checklist')
 
-    expect(verifiedSources.every((source) => source.directUrl && !isGenericSourceUrl(source.directUrl))).toBe(true)
-    expect(verifiedSources.every((source) => !source.directUrl.includes('/results?search_query='))).toBe(true)
+    expect(linkedSources.every((source) => source.directUrl && !isGenericSourceUrl(source.directUrl))).toBe(true)
+    expect(linkedSources.every((source) => !source.directUrl.includes('/results?search_query='))).toBe(true)
     expect(
       verifiedSources
         .filter((source) => source.sourceKind === 'youtubeVideo')
@@ -59,12 +61,14 @@ describe('exercise demo catalog', () => {
     ).toBe(true)
   })
 
-  it('has working Watch media for multiple exercises and explicit disabled states for unreviewed demos', () => {
+  it('has working Watch, Read, and Checklist media without upgrading unreviewed demos', () => {
     expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('downward-dog'))).toBe(true)
     expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('dead-bug'))).toBe(true)
     expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('step-up'))).toBe(true)
-    expect(getExerciseDemoMedia('tibialis-raise')?.qualityStatus).toBe('needsReview')
-    expect(getExerciseDemoMedia('tibialis-raise')?.url).toBe('')
+    expect(learningActionForDemoMedia(getExerciseDemoMedia('90-90-hip-switch'))).toBe('Read')
+    expect(learningActionForDemoMedia(getExerciseDemoMedia('tibialis-raise'))).toBe('Checklist')
+    expect(getExerciseDemoMedia('sphinx-pose')?.qualityStatus).toBe('needsReview')
+    expect(getExerciseDemoMedia('sphinx-pose')?.url).toBe('')
   })
 
   it('does not seed generic source references on default library exercises', () => {
@@ -72,5 +76,15 @@ describe('exercise demo catalog', () => {
     const urls = defaultExercises.flatMap((exercise) => exercise.sourceReferences?.map((source) => source.url) ?? [])
 
     expect(urls.every((url) => !isGenericSourceUrl(url))).toBe(true)
+  })
+
+  it('gives default-visible library exercises a Watch, Read, or Checklist action', () => {
+    const defaultVisibleIds = [...defaultLibraryExerciseIds].filter((exerciseId) => !optionalSearchOnlyExerciseIds.has(exerciseId))
+
+    expect(
+      defaultVisibleIds.every((exerciseId) =>
+        ['Watch', 'Read', 'Checklist'].includes(learningActionForDemoMedia(getExerciseDemoMedia(exerciseId))),
+      ),
+    ).toBe(true)
   })
 })
