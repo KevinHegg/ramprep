@@ -1,11 +1,11 @@
 import type { CarbSourceType } from '../../types'
 
-export type FoodLookupSource = 'usda' | 'openFoodFacts'
+export type FoodLookupSource = 'usda'
 
 export interface FoodLookupResult {
   id: string
   source: FoodLookupSource
-  sourceType: Extract<CarbSourceType, 'usda' | 'openFoodFacts'>
+  sourceType: Extract<CarbSourceType, 'usda'>
   sourceId: string
   name: string
   brand?: string

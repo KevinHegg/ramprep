@@ -32,7 +32,7 @@ export const sourceLabels: Record<CarbSourceType, string> = {
   manual: 'manual',
   preset: 'preset',
   usda: 'USDA lookup',
-  openFoodFacts: 'Open Food Facts lookup',
+  openFoodFacts: 'legacy package lookup',
 }
 
 export const defaultCarbSettings = (updatedAt: string): CarbSettings => ({

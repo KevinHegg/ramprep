@@ -10,6 +10,7 @@ import type {
   ExerciseMedia,
   FoodLookupCache,
   PersonalExerciseDefault,
+  PrivateSetting,
   TourRoadmap,
   Routine,
   RoutineExercise,
@@ -35,6 +36,7 @@ export class RampRepDatabase extends Dexie {
   carbGoalHistory!: Table<CarbGoalHistory, string>
   carbPresets!: Table<CarbPreset, string>
   foodLookupCache!: Table<FoodLookupCache, string>
+  privateSettings!: Table<PrivateSetting, string>
 
   constructor() {
     super('ramprep')
@@ -100,6 +102,26 @@ export class RampRepDatabase extends Dexie {
       carbGoalHistory: '&id, effectiveDateISO',
       carbPresets: '&id, name, lastUsedAt, useCount',
       foodLookupCache: '&id, source, queryOrSourceId, expiresAt',
+    })
+
+    this.version(5).stores({
+      exercises: '&id, name, difficulty, group',
+      routines: '&id, enabled, order, type',
+      routineExercises: '&id, routineId, exerciseId, section, order',
+      workoutLogs: '&id, completedAt, routineId, status',
+      exerciseLogEntries: '&id, workoutLogId, exerciseId, equipmentKey',
+      personalExerciseDefaults: '&id, exerciseId, equipmentKey, updatedAt, source',
+      exerciseMedia: '&id, exerciseId, type, isOfflineCapable, isTrusted',
+      tourRoadmaps: '&id',
+      settings: '&id',
+      equipment: '&id, owned, recommended',
+      schedulePreferences: '&id',
+      carbEntries: '&id, dateISO, mealSlot, createdAt, sourceType',
+      carbSettings: '&id',
+      carbGoalHistory: '&id, effectiveDateISO',
+      carbPresets: '&id, name, lastUsedAt, useCount',
+      foodLookupCache: '&id, source, queryOrSourceId, expiresAt',
+      privateSettings: '&key, updatedAt',
     })
   }
 }

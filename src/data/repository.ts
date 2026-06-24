@@ -19,6 +19,7 @@ import type {
   Exercise,
   ExerciseLogEntry,
   FoodLookupCache,
+  PrivateSetting,
   Routine,
   RoutineExercise,
   SchedulePreference,
@@ -33,6 +34,21 @@ import { toDateKey } from '../utils/date'
 import { defaultKeyForExercise, mostRecentCompletedEntry, resolveExerciseLogDefaults } from '../utils/defaults'
 
 const nowIso = () => new Date().toISOString()
+export const USDA_API_KEY_PRIVATE_SETTING_KEY = 'usdaFoodDataCentralApiKey'
+
+type LegacyCarbSettings = CarbSettings & {
+  foodDataCentralApiKey?: string
+  preferredNutritionSource?: CarbSettings['preferredNutritionSource'] | 'openFoodFacts'
+}
+
+const sanitizeCarbSettings = (settings: LegacyCarbSettings): CarbSettings => ({
+  id: 'default',
+  dailyNetCarbGoalGrams: normalizeCarbGrams(settings.dailyNetCarbGoalGrams),
+  saveFoodNamesInLog: Boolean(settings.saveFoodNamesInLog),
+  subtractSugarAlcoholsWhenAvailable: Boolean(settings.subtractSugarAlcoholsWhenAvailable),
+  preferredNutritionSource: settings.preferredNutritionSource === 'usda' ? 'usda' : 'manual',
+  updatedAt: settings.updatedAt,
+})
 
 export const createId = (prefix: string) => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -54,6 +70,7 @@ export const initializeAppData = async () => {
   if (settings) {
     await ensureV11Seeds()
     await ensureV13CarbDefaults()
+    await migrateLegacyUsdaKeyToPrivateSetting()
     return
   }
 
@@ -85,6 +102,7 @@ export const initializeAppData = async () => {
       await db.carbGoalHistory.put(defaultCarbGoalHistory(timestamp))
     },
   )
+  await migrateLegacyUsdaKeyToPrivateSetting()
 }
 
 export const ensureV13CarbDefaults = async () => {
@@ -102,6 +120,44 @@ export const ensureV13CarbDefaults = async () => {
       await db.carbGoalHistory.add(defaultCarbGoalHistory(timestamp))
     }
   })
+}
+
+export const getPrivateSetting = async (key: string) => db.privateSettings.get(key)
+
+export const savePrivateSetting = async (key: string, encryptedOrPlainValue: string): Promise<PrivateSetting> => {
+  const timestamp = nowIso()
+  const previous = await db.privateSettings.get(key)
+  const setting: PrivateSetting = {
+    key,
+    encryptedOrPlainValue,
+    createdAt: previous?.createdAt ?? timestamp,
+    updatedAt: timestamp,
+  }
+  await db.privateSettings.put(setting)
+  return setting
+}
+
+export const deletePrivateSetting = async (key: string) => {
+  await db.privateSettings.delete(key)
+}
+
+export const migrateLegacyUsdaKeyToPrivateSetting = async () => {
+  const settings = (await db.carbSettings.get('default')) as LegacyCarbSettings | undefined
+  if (!settings) {
+    return
+  }
+
+  const legacyKey = settings.foodDataCentralApiKey?.trim()
+  if (legacyKey) {
+    const existingPrivateKey = await db.privateSettings.get(USDA_API_KEY_PRIVATE_SETTING_KEY)
+    if (!existingPrivateKey) {
+      await savePrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY, legacyKey)
+    }
+  }
+
+  if (settings.foodDataCentralApiKey || (settings as { preferredNutritionSource?: string }).preferredNutritionSource === 'openFoodFacts') {
+    await db.carbSettings.put(sanitizeCarbSettings(settings))
+  }
 }
 
 export const ensureV11Seeds = async () => {
@@ -331,7 +387,7 @@ export const getAppData = async (): Promise<AppData> => {
     equipment,
     schedule,
     carbEntries,
-    carbSettings,
+    carbSettings: sanitizeCarbSettings(carbSettings as LegacyCarbSettings),
     carbGoalHistory,
     carbPresets,
     foodLookupCache,
@@ -404,8 +460,7 @@ export const saveCarbSettings = async (settings: CarbSettings, effectiveDateISO 
   const timestamp = nowIso()
   const previous = await db.carbSettings.get('default')
   const next: CarbSettings = {
-    ...settings,
-    dailyNetCarbGoalGrams: normalizeCarbGrams(settings.dailyNetCarbGoalGrams),
+    ...sanitizeCarbSettings(settings as LegacyCarbSettings),
     updatedAt: timestamp,
   }
 
@@ -625,21 +680,17 @@ export const deleteWorkoutLog = async (logId: string) => {
   })
 }
 
-const sanitizeCarbSettingsForExport = (settings: CarbSettings, includePrivateSettings = false): CarbSettings => ({
-  ...settings,
-  foodDataCentralApiKey: includePrivateSettings ? settings.foodDataCentralApiKey : undefined,
-})
-
-export const exportAllData = async (options: { includePrivateSettings?: boolean } = {}) => {
+export const exportAllData = async (_options: { includePrivateSettings?: boolean } = {}) => {
+  void _options
   const data = await getAppData()
   return JSON.stringify(
     {
       schemaVersion: 2,
       exportedAt: nowIso(),
-      privateSettingsIncluded: Boolean(options.includePrivateSettings),
+      privateSettingsIncluded: false,
       data: {
         ...data,
-        carbSettings: sanitizeCarbSettingsForExport(data.carbSettings, options.includePrivateSettings),
+        carbSettings: sanitizeCarbSettings(data.carbSettings),
         foodLookupCache: [],
       },
     },
@@ -709,7 +760,7 @@ export const importAllData = async (rawJson: string) => {
       await db.equipment.bulkAdd(data.equipment ?? [])
       await db.schedulePreferences.add(data.schedule)
       await db.carbEntries.bulkAdd(data.carbEntries ?? [])
-      await db.carbSettings.add(data.carbSettings ?? defaultCarbSettings(timestamp))
+      await db.carbSettings.add(sanitizeCarbSettings((data.carbSettings ?? defaultCarbSettings(timestamp)) as LegacyCarbSettings))
       await db.carbGoalHistory.bulkAdd(
         data.carbGoalHistory?.length ? data.carbGoalHistory : [defaultCarbGoalHistory(timestamp)],
       )

@@ -7,10 +7,13 @@ import {
   deleteCarbEntry,
   exportAllData,
   getAppData,
+  getPrivateSetting,
   importAllData,
   initializeAppData,
   saveCarbPreset,
   saveCarbSettings,
+  savePrivateSetting,
+  USDA_API_KEY_PRIVATE_SETTING_KEY,
   updateCarbEntry,
 } from './repository'
 
@@ -50,7 +53,8 @@ describe('carb repository operations', () => {
   it('exports carb entries and presets while excluding the USDA key by default', async () => {
     await initializeAppData()
     const data = await getAppData()
-    await saveCarbSettings({ ...data.carbSettings, foodDataCentralApiKey: 'private-key', dailyNetCarbGoalGrams: 60 })
+    await savePrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY, 'private-key')
+    await saveCarbSettings({ ...data.carbSettings, dailyNetCarbGoalGrams: 60 })
     await createCarbEntry({
       dateISO: '2026-06-22',
       mealSlot: 'dinner',
@@ -64,12 +68,13 @@ describe('carb repository operations', () => {
     const exported = JSON.parse(await exportAllData()) as { data: Awaited<ReturnType<typeof getAppData>> }
     expect(exported.data.carbEntries).toHaveLength(1)
     expect(exported.data.carbPresets).toHaveLength(1)
-    expect(exported.data.carbSettings.foodDataCentralApiKey).toBeUndefined()
+    expect('foodDataCentralApiKey' in exported.data.carbSettings).toBe(false)
 
     const exportedPrivate = JSON.parse(await exportAllData({ includePrivateSettings: true })) as {
       data: Awaited<ReturnType<typeof getAppData>>
     }
-    expect(exportedPrivate.data.carbSettings.foodDataCentralApiKey).toBe('private-key')
+    expect('foodDataCentralApiKey' in exportedPrivate.data.carbSettings).toBe(false)
+    expect((await getPrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY))?.encryptedOrPlainValue).toBe('private-key')
   })
 
   it('imports carb entries, goal history, and presets from backup JSON', async () => {

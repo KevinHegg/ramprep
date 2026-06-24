@@ -79,6 +79,29 @@ const quickExerciseGuidance = (
     }
   }
 
+  if (group === 'Walk & Ruck') {
+    const ruck = equipment.includes('rucksack')
+    return {
+      instructions: ruck
+        ? [
+            'Start with an easy route and a pack load you could repeat tomorrow.',
+            'Keep shoulders down, ribs stacked, and stride quiet.',
+            'Stop or reduce load for numbness, sharp pain, or next-day soreness that changes your gait.',
+          ]
+        : [
+            'Start at an easy pace and keep the walk conversational.',
+            'Stand tall, breathe steadily, and let the walk build base without becoming a workout test.',
+            'Stop with enough energy that tomorrow still feels available.',
+          ],
+      formCues: ruck
+        ? ['Tall posture', 'Pack snug, not bouncing', 'Quiet stride', 'No numbness or sharp pain']
+        : ['Easy pace', 'Tall posture', 'Relaxed shoulders', 'Comfortable stride'],
+      commonMistakes: ruck
+        ? ['Filling the whole pack too soon', 'Letting straps dig or bounce', 'Chasing hills while sore', 'Ignoring tingling or hot spots']
+        : ['Turning every walk hard', 'Overstriding', 'Skipping water in heat', 'Ignoring foot discomfort'],
+    }
+  }
+
   if (group === 'Ride Sessions') {
     return {
       instructions: [
@@ -789,13 +812,26 @@ const extraExerciseSeeds: ExerciseSeed[] = [
   quickExercise('low-cadence-climb-intervals', 'low-cadence climb intervals', 'Ride Sessions', ['bike'], ['glutes', 'quads', 'core'], { durationSeconds: 2400, effort: 7 }, ['hill climbing'], 'Low-cadence hill strength intervals without sprinting.'),
   quickExercise('loaded-gravel-ride', 'loaded gravel ride', 'Ride Sessions', ['bike'], ['aerobic base', 'trunk'], { durationSeconds: 5400, distance: '20 mi', effort: 6 }, ['loaded-bike durability'], 'Practice handling and pacing with bags or load.'),
   quickExercise('recovery-spin', 'recovery spin', 'Recovery', ['bike'], ['recovery'], { durationSeconds: 1800, effort: 2 }, ['recovery'], 'Easy spin to move blood without adding fatigue.'),
-  quickExercise('walk-hike', 'walk/hike', 'Recovery', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 2700, effort: 3 }, ['ride conditioning'], 'Low-stress outdoor conditioning for busy weeks.'),
+  quickExercise('walk-hike', 'walk/hike', 'Walk & Ruck', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 2700, effort: 3 }, ['walking base'], 'Low-stress outdoor conditioning for busy weeks.'),
+  quickExercise('commute-walk', 'commute walk', 'Walk & Ruck', ['bodyweight'], ['aerobic base'], { durationSeconds: 1500, distance: '1.2 mi', effort: 2 }, ['walking base'], 'Default 1.2 mile commute walk for easy consistency.'),
+  quickExercise('dog-walk', 'dog walk', 'Walk & Ruck', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 3000, distance: '2.5 mi', effort: 2 }, ['walking base', 'recovery'], 'Default 2.5 mile dog walk that supports base without hard training stress.'),
+  quickExercise('dog-walk-light-ruck', 'dog walk with light ruck', 'Walk & Ruck', ['bodyweight', 'rucksack'], ['aerobic base', 'posture'], { durationSeconds: 3000, distance: '2.5 mi', effort: 3 }, ['walking base', 'ruck tolerance'], 'Dog walk with a deliberately light hydration ruck. Dog comfort and posture stay first.'),
+  quickExercise('hydration-ruck-walk', 'hydration ruck walk', 'Walk & Ruck', ['bodyweight', 'rucksack'], ['aerobic base', 'posture', 'trunk'], { durationSeconds: 2100, distance: '2 mi', effort: 4 }, ['ruck tolerance', 'loaded-bike durability'], 'Easy pack-carrying walk using a hydration rucksack. Capacity is not the target.'),
+  quickExercise('ruck-commute', 'ruck commute', 'Walk & Ruck', ['bodyweight', 'rucksack'], ['aerobic base', 'posture'], { durationSeconds: 1500, distance: '1.2 mi', effort: 3 }, ['ruck tolerance', 'walking base'], 'Short commute walk with a light hydration ruck for gradual load exposure.'),
+  quickExercise('easy-posture-ruck', 'easy posture ruck', 'Walk & Ruck', ['bodyweight', 'rucksack'], ['posture', 'trunk', 'aerobic base'], { durationSeconds: 1800, distance: '1.5 mi', effort: 3 }, ['ruck tolerance'], 'Short posture-focused ruck kept easy enough to recover from quickly.'),
+  quickExercise('ruck-hill-walk', 'ruck hill walk', 'Walk & Ruck', ['bodyweight', 'rucksack'], ['glutes', 'calves', 'trunk'], { durationSeconds: 1800, distance: '1.5 mi', effort: 5 }, ['ruck tolerance', 'hill climbing'], 'Later-stage gentle hill ruck only when flat rucks feel boringly comfortable.'),
   quickExercise('burley-loaded-trailer-ride', 'Burley loaded trailer ride', 'Burley & Trailer Work', ['bike', 'trailer'], ['aerobic base', 'trunk', 'handling'], { durationSeconds: 2700, distance: '8 mi', effort: 5 }, ['trailer handling', 'loaded-bike durability'], 'Gentle trailer conditioning with dog comfort as the first constraint.'),
   quickExercise('trailer-walk', 'trailer walk', 'Burley & Trailer Work', ['trailer', 'bodyweight'], ['handling', 'aerobic base'], { durationSeconds: 1200, effort: 3 }, ['trailer handling', 'recovery'], 'Low-speed trailer handling practice on foot before dog-loaded riding.'),
   quickExercise('trailer-hill-starts', 'trailer hill starts', 'Burley & Trailer Work', ['bike', 'trailer'], ['handling', 'braking', 'hill starts'], { durationSeconds: 1500, distance: '3 mi', effort: 5 }, ['trailer handling', 'hill climbing'], 'Controlled trailer hill starts and stops on a gentle grade before loaded climbs.'),
   quickExercise('loaded-carry-for-trailer-days', 'loaded carry for trailer days', 'Carry & Load Transfer', ['carry', 'dumbbell', 'kettlebell'], ['trunk', 'grip', 'load tolerance'], { sets: 4, durationSeconds: 45, effort: 6 }, ['loaded-bike durability'], 'Carry work that builds trunk stiffness for loaded bike and trailer handling.'),
   quickExercise('controlled-trailer-towing-workout', 'controlled trailer towing workout', 'Burley & Trailer Work', ['bike', 'trailer'], ['handling', 'aerobic base', 'trunk'], { durationSeconds: 2400, distance: '5 mi', effort: 4 }, ['trailer handling', 'loaded-bike durability'], 'Short controlled towing session with stops, turns, braking practice, and comfort checks.'),
   quickExercise('easy-tour-specificity-session', 'easy tour specificity session', 'Ride Sessions', ['bike'], ['aerobic base', 'pacing'], { durationSeconds: 3600, distance: '12 mi', effort: 4 }, ['ride conditioning', 'loaded-bike durability'], 'Easy touring-specific session for pacing, gear checks, nutrition notes, and steady effort.'),
+  quickExercise('dumbbell-bench-press', 'dumbbell bench press', 'Upper Back & Posture', ['dumbbell', 'bench'], ['chest', 'triceps', 'shoulders'], { sets: 3, reps: '8-12' }, ['bench strength'], 'Flat-bench dumbbell press option when the portable bench is available.'),
+  quickExercise('bench-supported-one-arm-row', 'bench-supported one-arm row', 'Upper Back & Posture', ['dumbbell', 'bench'], ['lats', 'mid back', 'core'], { sets: 3, reps: '10 each side' }, ['upper back', 'bench strength'], 'More supported one-arm row variation for less low-back fatigue.'),
+  quickExercise('bench-hip-thrust', 'bench hip thrust/glute bridge', 'Hinge & Posterior Chain', ['bodyweight', 'bench'], ['glutes', 'hamstrings'], { sets: 3, reps: '10' }, ['posterior chain', 'bench strength'], 'Bench-supported glute bridge or hip thrust for stronger hip extension.'),
+  quickExercise('bench-supported-rear-delt-raise', 'bench-supported rear delt raise', 'Upper Back & Posture', ['dumbbell', 'bench'], ['rear delts', 'upper back'], { sets: 2, reps: '12' }, ['upper back', 'bench strength'], 'Bench-supported rear-delt work that keeps the trunk quiet.'),
+  quickExercise('rear-foot-elevated-split-squat', 'rear-foot elevated split squat', 'Single-Leg Strength', ['bodyweight', 'dumbbell', 'bench'], ['glutes', 'quads'], { sets: 2, reps: '6 each leg' }, ['hill climbing', 'bench strength'], 'Optional advanced split squat using the bench as rear-foot support.'),
+  quickExercise('step-up-to-bench', 'step-up to bench', 'Single-Leg Strength', ['bodyweight', 'dumbbell', 'bench'], ['glutes', 'quads', 'calves'], { sets: 2, reps: '6 each leg' }, ['hill climbing', 'bench strength'], 'Only use when the bench is specifically rated and marked safe for step-ups.'),
 ]
 
 export const seedExercises = [...exerciseSeeds, ...extraExerciseSeeds].map(makeExercise)
@@ -847,7 +883,7 @@ export const seedRoutineExercises: RoutineExercise[] = [
   routineExercise('routine-a-back-hinge-core', 'bodyweight squat', 'warmup', 4, { sets: 2, reps: '8' }),
   routineExercise('routine-a-back-hinge-core', 'kettlebell deadlift', 'main', 5, { sets: 3, reps: '8' }),
   routineExercise('routine-a-back-hinge-core', 'goblet squat', 'main', 6, { sets: 3, reps: '8' }),
-  routineExercise('routine-a-back-hinge-core', 'one-arm dumbbell row', 'main', 7, { sets: 3, reps: '10 each side', side: 'each' }),
+  routineExercise('routine-a-back-hinge-core', 'one-arm dumbbell row', 'main', 7, { sets: 3, reps: '10 each side', side: 'each', variationKey: 'row-option', variationOptions: ['one-arm dumbbell row', 'bench-supported one-arm row'] }),
   routineExercise('routine-a-back-hinge-core', 'suitcase carry', 'main', 8, { sets: 4, durationSeconds: 45, side: 'each', notes: 'Build toward 60 seconds each side.' }),
   routineExercise('routine-a-back-hinge-core', 'dead bug', 'main', 9, { sets: 2, reps: '8 each side', side: 'each' }),
   routineExercise('routine-a-back-hinge-core', 'side plank', 'main', 10, { sets: 2, durationSeconds: 30, side: 'each', notes: 'Add a third set when 40 seconds is clean.' }),
@@ -855,10 +891,10 @@ export const seedRoutineExercises: RoutineExercise[] = [
   routineExercise('routine-b-legs-cycling-support', 'step-up', 'main', 1, { sets: 3, reps: '8 each leg', side: 'each' }),
   routineExercise('routine-b-legs-cycling-support', 'dumbbell Romanian deadlift', 'main', 2, { sets: 3, reps: '8' }),
   routineExercise('routine-b-legs-cycling-support', 'split squat', 'main', 3, { sets: 3, reps: '8 each leg', side: 'each', notes: 'Use 2 sets on lower-energy days.' }),
-  routineExercise('routine-b-legs-cycling-support', 'dumbbell floor press', 'main', 4, { sets: 3, reps: '8-12', variationKey: 'press-option', variationOptions: ['dumbbell floor press', 'push-up'] }),
+  routineExercise('routine-b-legs-cycling-support', 'dumbbell floor press', 'main', 4, { sets: 3, reps: '8-12', variationKey: 'press-option', variationOptions: ['dumbbell floor press', 'push-up', 'dumbbell bench press'] }),
   routineExercise('routine-b-legs-cycling-support', 'band pull-apart', 'main', 5, { sets: 3, reps: '15' }),
   routineExercise('routine-b-legs-cycling-support', 'bird dog', 'main', 6, { sets: 2, reps: '8 each side', side: 'each' }),
-  routineExercise('routine-b-legs-cycling-support', 'glute bridge march', 'main', 7, { sets: 2, reps: '10 each side', side: 'each' }),
+  routineExercise('routine-b-legs-cycling-support', 'glute bridge march', 'main', 7, { sets: 2, reps: '10 each side', side: 'each', variationKey: 'glute-option', variationOptions: ['glute bridge march', 'bench hip thrust/glute bridge'] }),
 
   routineExercise('routine-c-conditioning-circuit', 'kettlebell swing', 'circuit', 1, { reps: '10', variationKey: 'hinge-option', variationOptions: ['kettlebell swing', 'kettlebell deadlift'], notes: 'Use deadlift if swings are not feeling crisp.' }),
   routineExercise('routine-c-conditioning-circuit', 'push-up', 'circuit', 2, { reps: '8-12' }),
@@ -892,6 +928,8 @@ export const seedEquipment: Equipment[] = [
   { id: 'kettlebell-25-35', name: 'kettlebell: 25-35 lb starter', kind: 'kettlebell', owned: false, recommended: true },
   { id: 'kettlebell-45-53', name: 'kettlebell: 45-53 lb later', kind: 'kettlebell', owned: false, recommended: true },
   { id: 'adjustable-dumbbells', name: 'adjustable dumbbells or 20/30/40 lb pairs', kind: 'dumbbell', owned: false, recommended: true },
+  { id: 'portable-flat-bench', name: 'portable flat bench', kind: 'bench', owned: false, recommended: true, notes: 'For pressing, supported rows, hip thrusts, and rear delt raises. Step-ups need a separate safety toggle.' },
+  { id: 'hydration-rucksack-12l', name: 'hydration rucksack 12L', kind: 'rucksack', owned: false, recommended: true, notes: 'Use as a light ruck. Capacity is not the target load.' },
   { id: 'loop-bands', name: 'loop resistance bands', kind: 'band', owned: false, recommended: true },
   { id: 'suspension-trainer', name: 'optional suspension trainer/TRX', kind: 'suspension trainer', owned: false, recommended: false },
   { id: 'pull-up-bar', name: 'optional pull-up bar', kind: 'pull-up bar', owned: false, recommended: false },
@@ -903,6 +941,12 @@ export const seedSettings: UserSettings = {
   bodyweight: undefined,
   durationPreference: 30,
   googleAppsScriptUrl: '',
+  commuteDefaultMiles: 1.2,
+  dogWalkDefaultMiles: 2.5,
+  ruckDefaultWaterLiters: 1,
+  ruckDefaultExtraWeight: 0,
+  ruckEmptyPackWeight: 2,
+  benchStepUpsSafe: false,
   darkMode: 'system',
   seededAt: seedTimestamp,
   updatedAt: seedTimestamp,

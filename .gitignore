@@ -13,6 +13,10 @@ dist-ssr
 output
 tmp
 *.local
+.env.local
+local.private.json
+*.private.json
+*.private.*
 
 # Editor directories and files
 .vscode/*

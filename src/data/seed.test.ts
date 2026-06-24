@@ -43,6 +43,7 @@ describe('seed exercise guidance', () => {
         'Recovery',
         'Burley & Trailer Work',
         'Ride Sessions',
+        'Walk & Ruck',
       ]),
     )
 

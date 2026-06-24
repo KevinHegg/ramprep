@@ -1,4 +1,4 @@
-import { priorityExerciseIds } from '../data/exerciseDemoCatalog'
+import { getExerciseDemoMedia, priorityExerciseIds } from '../data/exerciseDemoCatalog'
 import type { Exercise } from '../types'
 
 export const bannedInstructionPatterns = [
@@ -52,8 +52,8 @@ export const lintExerciseInstructions = (exercise: Exercise, options: { priority
     issues.push({ exerciseId: exercise.id, field: 'commonMistakes', message: 'Priority exercises need at least 3 common mistakes.' })
   }
 
-  if (priority && !exercise.sourceReferences?.length) {
-    issues.push({ exerciseId: exercise.id, field: 'sourceReferences', message: 'Priority exercises need at least one source/reference.' })
+  if (priority && !exercise.sourceReferences?.length && !getExerciseDemoMedia(exercise.id)) {
+    issues.push({ exerciseId: exercise.id, field: 'sourceReferences', message: 'Priority exercises need a direct source/reference or an explicit needs-review demo state.' })
   }
 
   return issues

@@ -10,6 +10,8 @@ export type EquipmentKind =
   | 'bike'
   | 'trailer'
   | 'chair'
+  | 'bench'
+  | 'rucksack'
   | 'foam roller'
   | 'suspension trainer'
   | 'pull-up bar'
@@ -34,7 +36,7 @@ export type CarbMealSlot =
   | 'dinner'
   | 'eveningSnack'
 export type CarbSourceType = 'manual' | 'preset' | 'usda' | 'openFoodFacts'
-export type PreferredNutritionSource = 'manual' | 'usda' | 'openFoodFacts'
+export type PreferredNutritionSource = 'manual' | 'usda'
 
 export interface ExerciseDefaults {
   sets?: number
@@ -56,6 +58,7 @@ export type ExerciseGroup =
   | 'Recovery'
   | 'Burley & Trailer Work'
   | 'Ride Sessions'
+  | 'Walk & Ruck'
 
 export type BikeTourPurpose =
   | 'anti-extension'
@@ -69,6 +72,9 @@ export type BikeTourPurpose =
   | 'recovery'
   | 'ride conditioning'
   | 'trailer handling'
+  | 'walking base'
+  | 'ruck tolerance'
+  | 'bench strength'
 
 export interface ExerciseSourceReference {
   title: string
@@ -170,6 +176,12 @@ export interface UserSettings {
   bodyweight?: number
   durationPreference: 20 | 30 | 45 | 60
   googleAppsScriptUrl?: string
+  commuteDefaultMiles?: number
+  dogWalkDefaultMiles?: number
+  ruckDefaultWaterLiters?: number
+  ruckDefaultExtraWeight?: number
+  ruckEmptyPackWeight?: number
+  benchStepUpsSafe?: boolean
   darkMode: 'system' | 'light' | 'dark'
   seededAt: string
   updatedAt: string
@@ -193,7 +205,6 @@ export interface CarbSettings {
   dailyNetCarbGoalGrams: number
   saveFoodNamesInLog: boolean
   subtractSugarAlcoholsWhenAvailable: boolean
-  foodDataCentralApiKey?: string
   preferredNutritionSource: PreferredNutritionSource
   updatedAt: string
 }
@@ -225,6 +236,13 @@ export interface FoodLookupCache {
   resultJson: string
   cachedAt: string
   expiresAt: string
+}
+
+export interface PrivateSetting {
+  key: string
+  encryptedOrPlainValue: string
+  createdAt: string
+  updatedAt: string
 }
 
 export interface Equipment {

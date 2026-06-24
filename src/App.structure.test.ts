@@ -14,7 +14,7 @@ const sourceBetween = (start: string, end: string) => appSource.slice(appSource.
 
 describe('mobile UI structure', () => {
   it('uses exactly five primary bottom nav items', () => {
-    expect(primaryNavItems.map((item) => item.label)).toEqual(['Today', 'Train', 'Ride', 'Carbs', 'More'])
+    expect(primaryNavItems.map((item) => item.label)).toEqual(['Today', 'Train', 'Ride', 'Net Carbs', 'More'])
   })
 
   it('uses full-viewport exercise demo styles with sticky controls', () => {
@@ -85,6 +85,7 @@ describe('mobile UI structure', () => {
       'Carries & Load',
       'Mobility Reset',
       'Ride Sessions',
+      'Walk & Ruck',
       'Burley / Trailer',
     ])
     expect(defaultLibraryExerciseIds.has('downward-dog')).toBe(false)
@@ -103,9 +104,11 @@ describe('mobile UI structure', () => {
   it('adds a Ride screen that saves ride logs and protects the Burley flow', () => {
     expect(appSource).toContain("page === 'ride'")
     expect(appSource).toContain('handleSaveRideLog')
-    expect(appSource).toContain("createWorkoutLog({ name: `Ride: ${rideDraft.template}` }")
+    expect(appSource).toContain('createWorkoutLog({ name: `${sessionKind}: ${draft.template}` }')
     expect(appSource).toContain('Dog comfort check first')
     expect(appSource).toContain('No hard repeats with dog')
+    expect(appSource).toContain('Ruck walk')
+    expect(appSource).toContain('Walk base')
   })
 
   it('keeps demo media honest when sources need review', () => {

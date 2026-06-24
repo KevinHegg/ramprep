@@ -1,63 +1,12 @@
-import { getExerciseDemoMedia, priorityExerciseIds } from './exerciseDemoCatalog'
+import { getExerciseDemoMedia, isVerifiedDemoMedia, priorityExerciseIds } from './exerciseDemoCatalog'
 import type { Exercise, ExerciseSourceReference } from '../types'
 
 type InstructionOverride = Partial<Pick<Exercise, 'purpose' | 'setup' | 'instructions' | 'formCues' | 'commonMistakes' | 'regressions' | 'progressions' | 'dose' | 'safety'>>
 
-const reviewedAtISO = '2026-06-23T16:30:00.000Z'
-
-const fallbackSources: Record<string, ExerciseSourceReference> = {
-  ace: {
-    title: 'ACE Exercise Library',
-    provider: 'ACE Fitness',
-    url: 'https://www.acefitness.org/resources/everyone/exercise-library/',
-    reviewedAtISO,
-  },
-  nasm: {
-    title: 'NASM Exercise Library',
-    provider: 'NASM',
-    url: 'https://www.nasm.org/resource-center/exercise-library',
-    reviewedAtISO,
-  },
-  yoga: {
-    title: 'Yoga Journal Pose Library',
-    provider: 'Yoga Journal',
-    url: 'https://www.yogajournal.com/poses/',
-    reviewedAtISO,
-  },
-  wger: {
-    title: 'wger Exercise Database',
-    provider: 'wger',
-    url: 'https://wger.de/en/exercise/overview/',
-    reviewedAtISO,
-  },
-  burley: {
-    title: 'Burley safety guidance',
-    provider: 'Burley',
-    url: 'https://burley.com/pages/safety',
-    reviewedAtISO,
-  },
-}
-
-const yogaIds = new Set([
-  'downward-dog',
-  'cat-cow',
-  'childs-pose-side-reach',
-  'low-lunge-hip-flexor-stretch',
-  'figure-four-stretch',
-  'hamstring-stretch',
-  'thoracic-open-book',
-  'sphinx-pose',
-  'cobra-pose',
-  'couch-stretch',
-  'ankle-rocks',
-])
-
-const rideIds = new Set(['burley-loaded-trailer-ride', 'hill-repeat-ride', 'low-cadence-climb-intervals'])
-
 export const sourceReferencesForExercise = (exerciseId: string): ExerciseSourceReference[] => {
   const demoMedia = getExerciseDemoMedia(exerciseId)
   const demoSource =
-    demoMedia?.sourcePageUrl || demoMedia?.url
+    isVerifiedDemoMedia(demoMedia) && (demoMedia?.sourcePageUrl || demoMedia?.url)
       ? [
           {
             title: demoMedia.title,
@@ -72,19 +21,7 @@ export const sourceReferencesForExercise = (exerciseId: string): ExerciseSourceR
     return demoSource
   }
 
-  if (rideIds.has(exerciseId)) {
-    return [fallbackSources.burley, fallbackSources.ace]
-  }
-
-  if (yogaIds.has(exerciseId)) {
-    return [fallbackSources.yoga]
-  }
-
-  if (exerciseId === 'tibialis-raise') {
-    return [fallbackSources.wger, fallbackSources.ace]
-  }
-
-  return [fallbackSources.ace, fallbackSources.nasm]
+  return []
 }
 
 export const priorityExerciseInstructionOverrides: Partial<Record<(typeof priorityExerciseIds)[number], InstructionOverride>> = {

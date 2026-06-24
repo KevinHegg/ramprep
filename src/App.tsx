@@ -42,6 +42,7 @@ import {
   deleteAllCarbEntries,
   deleteCarbEntry,
   deleteCarbPreset,
+  deletePrivateSetting,
   deleteRoutineExercise,
   deleteWorkoutLog,
   duplicateRoutine,
@@ -50,6 +51,7 @@ import {
   exportWorkoutLogsCsv,
   getFoodLookupCache,
   getAppData,
+  getPrivateSetting,
   importAllData,
   initializeAppData,
   markCarbPresetUsed,
@@ -59,15 +61,17 @@ import {
   saveEquipment,
   saveExercise,
   saveFoodLookupCache,
+  savePrivateSetting,
   saveRoutine,
   saveRoutineExercise,
   saveRoadmap,
   saveSchedule,
   saveSettings,
+  USDA_API_KEY_PRIVATE_SETTING_KEY,
   updateCarbEntry,
   updateWorkoutLog,
 } from './data/repository'
-import { getExerciseDemoMedia, isVerifiedDemoMedia } from './data/exerciseDemoCatalog'
+import { getExerciseDemoMedia, isVerifiedDemoMedia, isVerifiedVideoDemoMedia } from './data/exerciseDemoCatalog'
 import { primaryNavItems } from './data/navigation'
 import {
   isDefaultLibraryExercise,
@@ -100,6 +104,7 @@ import {
   personalDefaultForExercise,
   resolveExerciseLogDefaults,
 } from './utils/defaults'
+import { calculateRuckLoadPounds, ruckLoadNotice } from './utils/ruck'
 import { functionalCategories, getExerciseCategory, type FunctionalCategory } from './utils/exerciseCategories'
 import {
   buildCarbReports,
@@ -113,9 +118,8 @@ import {
   totalCarbsByMeal,
 } from './utils/carbs'
 import { validateGoogleAppsScriptUrl } from './services/googleSheetsSync'
-import { searchOpenFoodFacts, openFoodFactsWarning } from './services/foodLookup/openFoodFacts'
 import { getUsdaFoodDetails, searchUsdaFoods } from './services/foodLookup/usdaFoodDataCentral'
-import type { FoodLookupResult, FoodLookupSource } from './services/foodLookup/types'
+import type { FoodLookupResult } from './services/foodLookup/types'
 import type {
   AppData,
   BikeTourPurpose,
@@ -140,9 +144,37 @@ type Page = 'dashboard' | 'train' | 'ride' | 'workouts' | 'log' | 'carbs' | 'pro
 type WorkoutsTab = 'routines' | 'library'
 type LogMode = 'recommended' | 'routine' | 'free'
 type ActiveWorkoutStage = 'workout' | 'review'
-type RideTemplate = 'Start ride log' | 'Hill repeats' | 'Burley trailer' | 'Recovery spin'
+type RideTemplate =
+  | 'Start ride log'
+  | 'Hill repeats'
+  | 'Burley trailer'
+  | 'Recovery spin'
+  | 'Commute walk'
+  | 'Dog walk'
+  | 'Ruck walk'
+  | 'Ruck commute'
 type RideSurface = 'pavement' | 'gravel' | 'mixed'
-type RideLoad = 'none' | 'bags' | 'trailer' | 'dog'
+type RideLoad = 'none' | 'bags' | 'trailer' | 'dog' | 'ruck'
+
+interface RideDraftState {
+  template: RideTemplate
+  minutes: number
+  miles: number
+  elevationGain: number
+  effort: number
+  surface: RideSurface
+  load: RideLoad
+  notes: string
+  dogComfortCheck: boolean
+  temperature: string
+  dogWeight: number
+  trailerLoadWeight: number
+  waterLiters: number
+  ruckEmptyPackWeight: number
+  ruckExtraWeight: number
+  discomfort: number
+  nextDaySoreness?: number
+}
 
 const navIconByPage: Record<(typeof primaryNavItems)[number]['page'], typeof Activity> = {
   dashboard: Home,
@@ -161,6 +193,10 @@ const rideTemplateExerciseId: Record<RideTemplate, string> = {
   'Hill repeats': 'hill-repeat-ride',
   'Burley trailer': 'burley-loaded-trailer-ride',
   'Recovery spin': 'recovery-spin',
+  'Commute walk': 'commute-walk',
+  'Dog walk': 'dog-walk',
+  'Ruck walk': 'hydration-ruck-walk',
+  'Ruck commute': 'ruck-commute',
 }
 
 const rideTemplateDefaults: Record<RideTemplate, { minutes: number; miles: number; effort: number; load: RideLoad }> = {
@@ -168,12 +204,20 @@ const rideTemplateDefaults: Record<RideTemplate, { minutes: number; miles: numbe
   'Hill repeats': { minutes: 45, miles: 6, effort: 8, load: 'none' },
   'Burley trailer': { minutes: 35, miles: 5, effort: 4, load: 'dog' },
   'Recovery spin': { minutes: 25, miles: 4, effort: 2, load: 'none' },
+  'Commute walk': { minutes: 25, miles: 1.2, effort: 2, load: 'none' },
+  'Dog walk': { minutes: 50, miles: 2.5, effort: 2, load: 'none' },
+  'Ruck walk': { minutes: 35, miles: 2, effort: 4, load: 'ruck' },
+  'Ruck commute': { minutes: 25, miles: 1.2, effort: 3, load: 'ruck' },
 }
+
+const rideTemplateOptions: RideTemplate[] = ['Start ride log', 'Hill repeats', 'Burley trailer', 'Recovery spin', 'Commute walk', 'Dog walk', 'Ruck walk', 'Ruck commute']
+const walkTemplates = new Set<RideTemplate>(['Commute walk', 'Dog walk'])
+const ruckTemplates = new Set<RideTemplate>(['Ruck walk', 'Ruck commute'])
 
 const landmarkWords = ['hands', 'feet', 'hips', 'ribs', 'knees', 'shoulders', 'spine', 'breath']
 
 const skipReasons: SkipReason[] = ['work', 'travel', 'fatigue', 'soreness', 'illness', 'no time', 'other']
-const equipmentKinds: EquipmentKind[] = ['bodyweight', 'dumbbell', 'kettlebell', 'band', 'yoga mat', 'carry', 'bike', 'trailer', 'chair', 'foam roller', 'suspension trainer', 'pull-up bar']
+const equipmentKinds: EquipmentKind[] = ['bodyweight', 'dumbbell', 'kettlebell', 'band', 'yoga mat', 'carry', 'bike', 'trailer', 'chair', 'bench', 'rucksack', 'foam roller', 'suspension trainer', 'pull-up bar']
 const exerciseGroups: ExerciseGroup[] = [
   'Mobility & Yoga',
   'Core Stability',
@@ -185,8 +229,9 @@ const exerciseGroups: ExerciseGroup[] = [
   'Recovery',
   'Burley & Trailer Work',
   'Ride Sessions',
+  'Walk & Ruck',
 ]
-const bikePurposes: BikeTourPurpose[] = ['anti-extension', 'anti-rotation', 'lateral stability', 'upper back', 'posterior chain', 'hill climbing', 'loaded-bike durability', 'mobility', 'recovery', 'ride conditioning', 'trailer handling']
+const bikePurposes: BikeTourPurpose[] = ['anti-extension', 'anti-rotation', 'lateral stability', 'upper back', 'posterior chain', 'hill climbing', 'loaded-bike durability', 'mobility', 'recovery', 'ride conditioning', 'trailer handling', 'walking base', 'ruck tolerance', 'bench strength']
 const emptyRoutines: Routine[] = []
 const emptyExercises: Exercise[] = []
 const emptyRoutineExercises: RoutineExercise[] = []
@@ -586,12 +631,40 @@ const ExerciseDemoButton = ({
   exercise: Exercise
   onOpen: (id: string, launcher?: HTMLElement) => void
   compact?: boolean
-}) => (
-  <button className={compact ? 'demo-button compact' : 'demo-button'} type="button" onClick={(event) => onOpen(exercise.id, event.currentTarget)}>
-    <CircleHelp aria-hidden="true" size={compact ? 16 : 18} />
-    <span>How to</span>
-  </button>
-)
+}) => {
+  const media = getExerciseDemoMedia(exercise.id)
+  const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
+  const label = isVerifiedVideoDemoMedia(verifiedMedia) ? 'Watch' : verifiedMedia ? 'Read how-to' : 'Demo needed'
+  const iconSize = compact ? 16 : 18
+
+  if (!verifiedMedia) {
+    return (
+      <span className={compact ? 'demo-button compact disabled' : 'demo-button disabled'} aria-disabled="true">
+        <CircleHelp aria-hidden="true" size={iconSize} />
+        <span>{label}</span>
+      </span>
+    )
+  }
+
+  return (
+    <button
+      className={compact ? 'demo-button compact' : 'demo-button'}
+      type="button"
+      onClick={(event) => {
+        if (verifiedMedia.kind === 'externalVideo' && verifiedMedia.url) {
+          const externalWindow = window.open(verifiedMedia.url, '_blank', 'noopener,noreferrer')
+          if (externalWindow) {
+            return
+          }
+        }
+        onOpen(exercise.id, event.currentTarget)
+      }}
+    >
+      <CircleHelp aria-hidden="true" size={iconSize} />
+      <span>{label}</span>
+    </button>
+  )
+}
 
 const ExerciseDemoView = ({
   exercise,
@@ -605,8 +678,9 @@ const ExerciseDemoView = ({
   onLog: () => void
 }) => {
   const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
-  const sourceHref = media?.sourcePageUrl ?? media?.url ?? exercise.sourceReferences?.[0]?.url
-  const [demoTab, setDemoTab] = useState<'watch' | 'do' | 'mistakes'>('watch')
+  const hasVideo = isVerifiedVideoDemoMedia(verifiedMedia)
+  const sourceHref = verifiedMedia?.sourcePageUrl ?? verifiedMedia?.url ?? exercise.sourceReferences?.[0]?.url
+  const [demoTab, setDemoTab] = useState<'watch' | 'do' | 'mistakes' | 'source'>(hasVideo ? 'watch' : 'do')
   const demoSteps = exercise.instructions.slice(0, 5).map(landmarkStep)
   const demoMistakes = exercise.commonMistakes.slice(0, 5)
 
@@ -626,12 +700,28 @@ const ExerciseDemoView = ({
       <main className="demo-view-body">
         <div className="demo-media-panel">
           {verifiedMedia?.kind === 'youtubeEmbed' && verifiedMedia.embedUrl ? (
-            <iframe
-              title={verifiedMedia.title}
-              src={verifiedMedia.embedUrl}
-              allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            />
+            <>
+              <iframe
+                title={verifiedMedia.title}
+                src={verifiedMedia.embedUrl}
+                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+              />
+              <a className="ghost-button" href={verifiedMedia.url} target="_blank" rel="noreferrer">
+                <ExternalLink aria-hidden="true" size={18} />
+                Open in YouTube
+              </a>
+            </>
+          ) : verifiedMedia?.kind === 'externalVideo' ? (
+            <div className="verified-link-panel">
+              <p className="eyebrow">Verified external video</p>
+              <h3>{verifiedMedia.title}</h3>
+              <p>{verifiedMedia.attributionText}</p>
+              <a className="primary-button" href={verifiedMedia.url} target="_blank" rel="noreferrer">
+                <ExternalLink aria-hidden="true" size={18} />
+                Open video
+              </a>
+            </div>
           ) : verifiedMedia?.kind === 'externalHowTo' ? (
             <div className="verified-link-panel">
               <p className="eyebrow">Verified external how-to</p>
@@ -658,18 +748,25 @@ const ExerciseDemoView = ({
         </div>
 
         <div className="demo-tab-row" role="tablist" aria-label="Exercise demo details">
-          <button className={demoTab === 'watch' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'watch'} onClick={() => setDemoTab('watch')}>
-            Watch
-          </button>
+          {hasVideo && (
+            <button className={demoTab === 'watch' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'watch'} onClick={() => setDemoTab('watch')}>
+              Watch
+            </button>
+          )}
           <button className={demoTab === 'do' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'do'} onClick={() => setDemoTab('do')}>
             Do
           </button>
           <button className={demoTab === 'mistakes' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'mistakes'} onClick={() => setDemoTab('mistakes')}>
             Mistakes
           </button>
+          {!hasVideo && (
+            <button className={demoTab === 'source' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'source'} onClick={() => setDemoTab('source')}>
+              Source
+            </button>
+          )}
         </div>
 
-        {demoTab === 'watch' && (
+        {demoTab === 'watch' && hasVideo && (
           <div className="demo-section demo-glance-panel">
             <p className="eyebrow">Watch</p>
             <h3>{verifiedMedia?.title ?? 'Demo needs review'}</h3>
@@ -726,9 +823,23 @@ const ExerciseDemoView = ({
           </div>
         )}
 
+        {demoTab === 'source' && (
+          <div className="demo-section demo-glance-panel">
+            <p className="eyebrow">Source</p>
+            <h3>{verifiedMedia?.title ?? 'No direct source attached'}</h3>
+            <p>{verifiedMedia?.attributionText ?? 'RampRep has local instructions, but no reviewed exercise-specific external source yet.'}</p>
+            {sourceHref && (
+              <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
+                <ExternalLink aria-hidden="true" size={18} />
+                Open source
+              </a>
+            )}
+          </div>
+        )}
+
         <p className="demo-attribution">
-          {media?.attributionText ?? 'No verified motion media is attached yet.'}
-          {media?.licenseName ? ` License: ${media.licenseName}.` : ''}
+          {verifiedMedia?.attributionText ?? 'No verified motion media is attached yet.'}
+          {verifiedMedia?.licenseName ? ` License: ${verifiedMedia.licenseName}.` : ''}
           {exercise.sourceReferences?.length ? ` Source: ${exercise.sourceReferences[0].provider}.` : ''}
         </p>
       </main>
@@ -795,14 +906,18 @@ function App() {
   const [carbEditEntry, setCarbEditEntry] = useState<CarbEntry | null>(null)
   const [presetDraft, setPresetDraft] = useState({ id: '', name: '', netCarbs: 0, servingDescription: '' })
   const [lookupQuery, setLookupQuery] = useState('')
-  const [lookupSource, setLookupSource] = useState<FoodLookupSource>('usda')
   const [lookupResults, setLookupResults] = useState<FoodLookupResult[]>([])
   const [lookupSelected, setLookupSelected] = useState<FoodLookupResult | null>(null)
   const [lookupOverride, setLookupOverride] = useState<number | undefined>()
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState('')
+  const [usdaKeyDraft, setUsdaKeyDraft] = useState('')
+  const [usdaKeySaved, setUsdaKeySaved] = useState(false)
+  const [usdaTestQuery, setUsdaTestQuery] = useState('plain greek yogurt')
+  const [usdaKeyBusy, setUsdaKeyBusy] = useState(false)
+  const [usdaKeyStatus, setUsdaKeyStatus] = useState('')
   const [carbPanel, setCarbPanel] = useState<'none' | 'lookup' | 'reports' | 'presets'>('none')
-  const [rideDraft, setRideDraft] = useState({
+  const [rideDraft, setRideDraft] = useState<RideDraftState>({
     template: 'Start ride log' as RideTemplate,
     minutes: 45,
     miles: 8,
@@ -815,6 +930,11 @@ function App() {
     temperature: '',
     dogWeight: 45,
     trailerLoadWeight: 0,
+    waterLiters: 1,
+    ruckEmptyPackWeight: 2,
+    ruckExtraWeight: 0,
+    discomfort: 0,
+    nextDaySoreness: undefined,
   })
   const [updateReady, setUpdateReady] = useState(false)
   const [temporaryChangeDraft, setTemporaryChangeDraft] = useState({
@@ -827,13 +947,14 @@ function App() {
   const [historyExerciseName, setHistoryExerciseName] = useState('')
 
   const refresh = useCallback(async () => {
-    const snapshot = await getAppData()
+    const [snapshot, usdaPrivateSetting] = await Promise.all([
+      getAppData(),
+      getPrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY),
+    ])
     setData(snapshot)
     setSettingsDraft(snapshot.settings)
     setCarbSettingsDraft(snapshot.carbSettings)
-    if (snapshot.carbSettings.preferredNutritionSource !== 'manual') {
-      setLookupSource(snapshot.carbSettings.preferredNutritionSource)
-    }
+    setUsdaKeySaved(Boolean(usdaPrivateSetting?.encryptedOrPlainValue.trim()))
     setScheduleDraft(snapshot.schedule)
     setLoading(false)
   }, [])
@@ -1008,67 +1129,102 @@ function App() {
     showFlash('Skipped workout logged.', true)
   }
 
-  const applyRideTemplate = (template: RideTemplate) => {
+  const buildRideDraftForTemplate = (template: RideTemplate, current = rideDraft): RideDraftState => {
     const defaults = rideTemplateDefaults[template]
-    setRideDraft((current) => ({
+    const miles =
+      template === 'Commute walk' || template === 'Ruck commute'
+        ? settingsDraft?.commuteDefaultMiles ?? defaults.miles
+        : template === 'Dog walk'
+        ? settingsDraft?.dogWalkDefaultMiles ?? defaults.miles
+        : defaults.miles
+
+    return {
       ...current,
       template,
       minutes: defaults.minutes,
-      miles: defaults.miles,
+      miles,
       effort: defaults.effort,
       load: defaults.load,
+      waterLiters: ruckTemplates.has(template) ? settingsDraft?.ruckDefaultWaterLiters ?? current.waterLiters : current.waterLiters,
+      ruckEmptyPackWeight: settingsDraft?.ruckEmptyPackWeight ?? current.ruckEmptyPackWeight,
+      ruckExtraWeight: ruckTemplates.has(template) ? settingsDraft?.ruckDefaultExtraWeight ?? current.ruckExtraWeight : current.ruckExtraWeight,
       dogComfortCheck: template === 'Burley trailer' ? true : current.dogComfortCheck,
-    }))
+    }
   }
 
-  const handleSaveRideLog = async () => {
+  const applyRideTemplate = (template: RideTemplate) => {
+    setRideDraft((current) => buildRideDraftForTemplate(template, current))
+  }
+
+  const handleSaveRideLog = async (draft = rideDraft) => {
     if (!data) {
       return
     }
 
-    if (rideDraft.template === 'Hill repeats' && (rideDraft.load === 'dog' || rideDraft.load === 'trailer')) {
-      showFlash('No hard repeats with dog or trailer load. Choose Burley trailer or unload first.')
+    const isRuckSession = ruckTemplates.has(draft.template) || draft.load === 'ruck'
+    const isWalkSession = walkTemplates.has(draft.template) || isRuckSession
+    const sessionKind = isRuckSession ? 'Ruck' : isWalkSession ? 'Walk' : 'Ride'
+
+    if (draft.template === 'Hill repeats' && (draft.load === 'dog' || draft.load === 'trailer' || draft.load === 'ruck')) {
+      showFlash('No hard repeats with dog, trailer, or ruck load. Unload first or choose an easy session.')
       return
     }
 
-    if (rideDraft.template === 'Burley trailer' && !rideDraft.dogComfortCheck) {
+    if (draft.template === 'Burley trailer' && !draft.dogComfortCheck) {
       showFlash('Dog comfort check comes first.')
       return
     }
 
-    const exerciseId = rideTemplateExerciseId[rideDraft.template]
+    const exerciseId = rideTemplateExerciseId[draft.template]
     const exercise = exerciseById.get(exerciseId)
-    const totalTowedLoad = rideDraft.load === 'dog' || rideDraft.load === 'trailer'
-      ? rideDraft.dogWeight + rideDraft.trailerLoadWeight
+    const totalTowedLoad = draft.load === 'dog' || draft.load === 'trailer'
+      ? draft.dogWeight + draft.trailerLoadWeight
       : 0
+    const totalRuckLoad = calculateRuckLoadPounds({
+      waterLiters: draft.waterLiters,
+      emptyPackWeight: draft.ruckEmptyPackWeight,
+      extraWeight: draft.ruckExtraWeight,
+    })
     const entry: WorkoutDraftEntry = {
       exerciseId,
-      equipmentKey: rideDraft.load === 'none' ? 'bike' : `bike-${rideDraft.load}`,
-      exerciseName: exercise?.name ?? rideDraft.template,
-      durationSeconds: rideDraft.minutes * 60,
-      distance: `${rideDraft.miles} mi`,
-      effort: rideDraft.effort,
-      notes: rideDraft.notes || undefined,
+      equipmentKey: isRuckSession ? 'hydration-rucksack-12l' : isWalkSession ? 'bodyweight' : draft.load === 'none' ? 'bike' : `bike-${draft.load}`,
+      exerciseName: exercise?.name ?? draft.template,
+      durationSeconds: draft.minutes * 60,
+      distance: `${draft.miles} mi`,
+      effort: draft.effort,
+      notes: draft.notes || undefined,
       customFields: {
-        elevationGain: rideDraft.elevationGain,
-        surface: rideDraft.surface,
-        load: rideDraft.load,
-        dogComfortCheck: rideDraft.dogComfortCheck,
-        temperature: rideDraft.temperature || undefined,
-        dogWeight: rideDraft.dogWeight,
-        trailerLoadWeight: rideDraft.trailerLoadWeight,
+        elevationGain: draft.elevationGain,
+        surface: draft.surface,
+        load: draft.load,
+        dogComfortCheck: draft.dogComfortCheck,
+        temperature: draft.temperature || undefined,
+        dogWeight: draft.dogWeight,
+        trailerLoadWeight: draft.trailerLoadWeight,
         totalTowedLoad,
+        waterLiters: isRuckSession ? draft.waterLiters : undefined,
+        ruckEmptyPackWeight: isRuckSession ? draft.ruckEmptyPackWeight : undefined,
+        ruckExtraWeight: isRuckSession ? draft.ruckExtraWeight : undefined,
+        totalRuckLoad: isRuckSession ? totalRuckLoad : undefined,
+        discomfort: isRuckSession ? draft.discomfort : undefined,
+        nextDaySoreness: isRuckSession ? draft.nextDaySoreness : undefined,
       },
     }
 
-    await createWorkoutLog({ name: `Ride: ${rideDraft.template}` }, [entry], {
-      totalMinutes: rideDraft.minutes,
-      notes: rideDraft.notes || undefined,
+    await createWorkoutLog({ name: `${sessionKind}: ${draft.template}` }, [entry], {
+      totalMinutes: draft.minutes,
+      notes: draft.notes || undefined,
       travelMode: data.schedule.travelMode,
       deloadApplied,
     })
     await refresh()
-    showFlash('Ride logged.', true)
+    showFlash(`${sessionKind} logged.${isRuckSession && draft.discomfort >= 4 ? ' Reduce load next time.' : ''}`, true)
+  }
+
+  const handleQuickSaveRideTemplate = async (template: RideTemplate) => {
+    const nextDraft = buildRideDraftForTemplate(template)
+    setRideDraft(nextDraft)
+    await handleSaveRideLog(nextDraft)
   }
 
   const handleClearLocalAppCache = async () => {
@@ -1363,7 +1519,7 @@ function App() {
 
   const handleExportJson = async (includePrivateSettings = false) => {
     downloadText(
-      `ramprep-backup-${new Date().toISOString().slice(0, 10)}${includePrivateSettings ? '-private' : ''}.json`,
+      `ramprep-backup-${new Date().toISOString().slice(0, 10)}.json`,
       await exportAllData({ includePrivateSettings }),
       'application/json',
     )
@@ -1436,6 +1592,54 @@ function App() {
     showFlash('Net carb settings saved.')
   }
 
+  const loadUsdaApiKey = async () =>
+    (await getPrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY))?.encryptedOrPlainValue.trim() ?? ''
+
+  const handleSaveUsdaApiKey = async () => {
+    const key = usdaKeyDraft.trim()
+    if (!key) {
+      setUsdaKeyStatus('Paste a USDA FoodData Central key first.')
+      return
+    }
+
+    await savePrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY, key)
+    await clearFoodLookupCache()
+    setUsdaKeyDraft('')
+    setUsdaKeySaved(true)
+    setUsdaKeyStatus('USDA key saved locally. Cache cleared.')
+    showFlash('USDA key saved locally.')
+  }
+
+  const handleClearUsdaApiKey = async () => {
+    await deletePrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY)
+    await clearFoodLookupCache()
+    setUsdaKeyDraft('')
+    setUsdaKeySaved(false)
+    setUsdaKeyStatus('USDA key cleared from this browser.')
+    showFlash('USDA key cleared.')
+  }
+
+  const handleTestUsdaLookup = async () => {
+    if (!carbSettingsDraft) {
+      return
+    }
+
+    setUsdaKeyBusy(true)
+    setUsdaKeyStatus('')
+    try {
+      const results = await searchUsdaFoods(usdaTestQuery || 'plain greek yogurt', {
+        apiKey: await loadUsdaApiKey(),
+        subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
+      })
+      setUsdaKeySaved(true)
+      setUsdaKeyStatus(results[0] ? `USDA test found ${results[0].name}: ${results[0].formula}` : 'USDA responded, but no matching foods were found.')
+    } catch (error) {
+      setUsdaKeyStatus(error instanceof Error ? error.message : 'USDA test failed.')
+    } finally {
+      setUsdaKeyBusy(false)
+    }
+  }
+
   const handlePresetSave = async () => {
     const name = presetDraft.name.trim()
     if (!name) {
@@ -1476,20 +1680,19 @@ function App() {
     setLookupError('')
     setLookupSelected(null)
     try {
-      const cached = await getFoodLookupCache(lookupSource, lookupQuery)
+      const cached = await getFoodLookupCache('usda', lookupQuery)
       if (cached) {
         setLookupResults(JSON.parse(cached.resultJson) as FoodLookupResult[])
         return
       }
 
       const options = {
-        apiKey: carbSettingsDraft.foodDataCentralApiKey,
+        apiKey: await loadUsdaApiKey(),
         subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
       }
-      const results =
-        lookupSource === 'usda' ? await searchUsdaFoods(lookupQuery, options) : await searchOpenFoodFacts(lookupQuery, options)
+      const results = await searchUsdaFoods(lookupQuery, options)
       setLookupResults(results)
-      await saveFoodLookupCache(lookupSource, lookupQuery, JSON.stringify(results))
+      await saveFoodLookupCache('usda', lookupQuery, JSON.stringify(results))
       if (!results.length) {
         setLookupError('No lookup results found. Manual entry still works.')
       }
@@ -1509,7 +1712,7 @@ function App() {
       const detailed =
         result.source === 'usda' && carbSettingsDraft
           ? (await getUsdaFoodDetails(result.sourceId, {
-              apiKey: carbSettingsDraft.foodDataCentralApiKey,
+              apiKey: await loadUsdaApiKey(),
               subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
             })) ?? result
           : result
@@ -1582,7 +1785,7 @@ function App() {
   const selectedDayGoal = goalForDate(carbSelectedDate, data.carbGoalHistory, data.carbSettings)
   const selectedDayStatus = carbStatusText(selectedDayTotal, selectedDayGoal)
   const recentPresets = sortedCarbPresets(data.carbPresets)
-  const lookupSourceLabel = lookupSource === 'usda' ? 'USDA' : 'Open Food Facts'
+  const lookupSourceLabel = 'USDA FoodData Central'
   const routineById = new Map(routines.map((routine) => [routine.id, routine]))
   const completedLogs = logs.filter((log) => log.status === 'completed')
   const strengthSessions = completedLogs.filter((log) => routineById.get(log.routineId ?? '')?.type === 'strength').length
@@ -1591,9 +1794,24 @@ function App() {
     return type === 'mobility' || type === 'recovery'
   }).length
   const rideSessions = completedLogs.filter((log) => routineById.get(log.routineId ?? '')?.type === 'bike' || /ride|bike|trailer/i.test(log.routineName)).length
+  const walkSessions = completedLogs.filter((log) => /walk|ruck/i.test(log.routineName)).length
+  const todayWalkBaseLogged = completedLogs.some((log) => /walk|ruck/i.test(log.routineName) && log.completedAt.slice(0, 10) === toDateKey(today))
   const hillTrailerMinutes = entries
     .filter((entry) => /hill|ride|trailer|burley|climb/i.test(entry.exerciseName))
     .reduce((total, entry) => total + Math.round((entry.durationSeconds ?? 0) / 60), 0)
+  const ruckMinutes = entries
+    .filter((entry) => /ruck/i.test(entry.exerciseName))
+    .reduce((total, entry) => total + Math.round((entry.durationSeconds ?? 0) / 60), 0)
+  const dogWalkMiles = entries
+    .filter((entry) => /dog walk/i.test(entry.exerciseName))
+    .reduce((total, entry) => total + Number.parseFloat(entry.distance?.match(/[\d.]+/)?.[0] ?? '0'), 0)
+  const currentRideIsRuck = ruckTemplates.has(rideDraft.template) || rideDraft.load === 'ruck'
+  const currentRideIsWalk = walkTemplates.has(rideDraft.template) || currentRideIsRuck
+  const currentRuckLoad = calculateRuckLoadPounds({
+    waterLiters: rideDraft.waterLiters,
+    emptyPackWeight: rideDraft.ruckEmptyPackWeight,
+    extraWeight: rideDraft.ruckExtraWeight,
+  })
   const librarySearchText = libraryQuery.trim().toLowerCase()
   const libraryFiltersActive = Boolean(categoryFilter || groupFilter || equipmentFilter || purposeFilter || difficultyFilter)
   const filteredExercises = exercises.filter((exercise) => {
@@ -1615,8 +1833,10 @@ function App() {
       libraryFiltersActive ||
       isDefaultLibraryExercise(exercise) ||
       (isSearchOnlyExercise(exercise) && Boolean(librarySearchText) && searchableMatch)
+    const passesSafetyGate = exercise.id !== 'step-up-to-bench' || Boolean(settingsDraft.benchStepUpsSafe) || editMode
 
     return (
+      passesSafetyGate &&
       defaultVisible &&
       searchableMatch &&
       (!categoryFilter || getExerciseCategory(exercise) === categoryFilter) &&
@@ -1683,7 +1903,7 @@ function App() {
                 {page === 'ride' && 'Ride'}
                 {page === 'workouts' && 'Workouts'}
                 {page === 'log' && 'Workout Log'}
-                {page === 'carbs' && 'Carbs'}
+              {page === 'carbs' && 'Net Carbs'}
               {page === 'progress' && 'Progress'}
               {page === 'more' && 'More'}
               {page === 'settings' && 'Settings'}
@@ -1701,6 +1921,7 @@ function App() {
 
       {demoExercise && (
         <ExerciseDemoView
+          key={demoExercise.id}
           exercise={demoExercise}
           media={demoMedia}
           onClose={closeExerciseDemo}
@@ -1746,16 +1967,16 @@ function App() {
             <div>
               <p className="eyebrow">Ride</p>
               <h2>{rideSessions} logged</h2>
-              <p>Ride, hill, gravel, or Burley.</p>
+              <p>Ride, walk, ruck, or Burley. Walk base: {todayWalkBaseLogged ? 'logged' : 'not logged'}.</p>
             </div>
             <button className="ghost-button" type="button" onClick={() => setPage('ride')}>
-              Start ride
+              Start
             </button>
           </Card>
 
           <Card className="cockpit-tile carb-summary-card">
             <div>
-              <p className="eyebrow">Carbs</p>
+              <p className="eyebrow">Net Carbs</p>
               <h2>
                 {carbReports.today.total} / {carbReports.today.goal}g
               </h2>
@@ -1983,22 +2204,48 @@ function App() {
         <main className="page-grid ride-page">
           <Card className="hero-card ride-hero-card">
             <div>
-              <p className="eyebrow">Ride</p>
+              <p className="eyebrow">Ride / Walk / Ruck</p>
               <h2>{rideDraft.template}</h2>
-              <p>{rideDraft.template === 'Burley trailer' ? 'Conditioning, not punishment. Dog comfort comes first.' : 'Log the ride without opening a training console.'}</p>
+              <p>
+                {rideDraft.template === 'Burley trailer'
+                  ? 'Conditioning, not punishment. Dog comfort comes first.'
+                  : currentRideIsRuck
+                  ? 'Light pack work. Capacity is not the target.'
+                  : currentRideIsWalk
+                  ? 'Easy base minutes without making it a hard training day.'
+                  : 'Log the ride without opening a training console.'}
+              </p>
             </div>
             <button className="primary-button" type="button" onClick={() => void handleSaveRideLog()}>
-              Save ride
+              Save
             </button>
           </Card>
 
           <section className="ride-template-grid">
-            {(['Start ride log', 'Hill repeats', 'Burley trailer', 'Recovery spin'] as RideTemplate[]).map((template) => (
+            {rideTemplateOptions.map((template) => (
               <button className={rideDraft.template === template ? 'active' : ''} key={template} type="button" onClick={() => applyRideTemplate(template)}>
                 {template}
               </button>
             ))}
           </section>
+
+          <Card className="walk-quick-card">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">One-tap done</p>
+                <h2>Walk base</h2>
+              </div>
+              <span className="tag">{todayWalkBaseLogged ? 'logged' : 'open'}</span>
+            </div>
+            <div className="button-grid">
+              {(['Commute walk', 'Dog walk', 'Ruck walk'] as RideTemplate[]).map((template) => (
+                <button className="ghost-button" key={template} type="button" onClick={() => void handleQuickSaveRideTemplate(template)}>
+                  <CheckCircle2 aria-hidden="true" size={18} />
+                  {template}
+                </button>
+              ))}
+            </div>
+          </Card>
 
           <Card className="ride-log-card">
             {rideDraft.template === 'Burley trailer' && (
@@ -2015,8 +2262,8 @@ function App() {
               </label>
             )}
             <div className="ride-field-grid">
-              <NumberStepper label="Minutes" value={rideDraft.minutes} min={0} max={600} step={5} quickOptions={[15, 25, 35, 45, 60, 90]} onChange={(value) => setRideDraft({ ...rideDraft, minutes: value ?? 0 })} />
-              <NumberStepper label="Miles" value={rideDraft.miles} min={0} max={200} step={0.5} suffix=" mi" quickOptions={[3, 5, 8, 10, 20, 40]} onChange={(value) => setRideDraft({ ...rideDraft, miles: value ?? 0 })} />
+              <NumberStepper label="Minutes" value={rideDraft.minutes} min={0} max={600} step={5} quickOptions={currentRideIsWalk ? [15, 25, 35, 45, 50, 60] : [15, 25, 35, 45, 60, 90]} onChange={(value) => setRideDraft({ ...rideDraft, minutes: value ?? 0 })} />
+              <NumberStepper label="Miles" value={rideDraft.miles} min={0} max={200} step={0.5} suffix=" mi" quickOptions={currentRideIsWalk ? [1.2, 2, 2.5, 3, 4, 5] : [3, 5, 8, 10, 20, 40]} onChange={(value) => setRideDraft({ ...rideDraft, miles: value ?? 0 })} />
               <NumberStepper label="Elevation" value={rideDraft.elevationGain} min={0} max={20000} step={50} suffix=" ft" quickOptions={[0, 250, 500, 1000, 2000]} onChange={(value) => setRideDraft({ ...rideDraft, elevationGain: value ?? 0 })} />
               <EffortPicker value={rideDraft.effort} onChange={(value) => setRideDraft({ ...rideDraft, effort: value ?? 1 })} />
               <label>
@@ -2034,9 +2281,28 @@ function App() {
                   <option value="bags">bags</option>
                   <option value="trailer">trailer</option>
                   <option value="dog">dog</option>
+                  <option value="ruck">ruck</option>
                 </select>
               </label>
             </div>
+
+            {currentRideIsRuck && (
+              <div className="burley-ride-panel">
+                <p className="notice">{ruckLoadNotice(rideDraft.discomfort)}</p>
+                <div className="ride-field-grid">
+                  <NumberStepper label="Water liters" value={rideDraft.waterLiters} min={0} max={12} step={0.5} suffix=" L" quickOptions={[0.5, 1, 1.5, 2, 3]} onChange={(value) => setRideDraft({ ...rideDraft, waterLiters: value ?? 0 })} />
+                  <WeightPicker units={data.settings.units} label="Empty pack" value={rideDraft.ruckEmptyPackWeight} onChange={(value) => setRideDraft({ ...rideDraft, ruckEmptyPackWeight: value ?? 0 })} />
+                  <WeightPicker units={data.settings.units} label="Extra load" value={rideDraft.ruckExtraWeight} onChange={(value) => setRideDraft({ ...rideDraft, ruckExtraWeight: value ?? 0 })} />
+                  <NumberStepper label="Discomfort" value={rideDraft.discomfort} min={0} max={10} step={1} suffix="/10" quickOptions={[0, 1, 2, 3, 4, 5]} onChange={(value) => setRideDraft({ ...rideDraft, discomfort: value ?? 0 })} />
+                  <NumberStepper label="Next-day sore" value={rideDraft.nextDaySoreness} min={0} max={10} step={1} suffix="/10" quickOptions={[0, 1, 2, 3, 4, 5]} onChange={(value) => setRideDraft({ ...rideDraft, nextDaySoreness: value })} />
+                  <div className="total-load-tile">
+                    <p className="eyebrow">Pack load</p>
+                    <strong>{currentRuckLoad} lb</strong>
+                    <small>Water uses 2.2 lb/L.</small>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {(rideDraft.template === 'Burley trailer' || rideDraft.load === 'dog' || rideDraft.load === 'trailer') && (
               <div className="burley-ride-panel">
@@ -3325,18 +3591,11 @@ function App() {
                 <input
                   value={lookupQuery}
                   onChange={(event) => setLookupQuery(event.target.value)}
-                  placeholder="food or packaged item"
+                  placeholder="food or branded item"
                 />
               </label>
-              <label>
-                Source
-                <select value={lookupSource} onChange={(event) => setLookupSource(event.target.value as FoodLookupSource)}>
-                  <option value="usda">USDA</option>
-                  <option value="openFoodFacts">Open Food Facts</option>
-                </select>
-              </label>
             </div>
-            {lookupSource === 'openFoodFacts' && <p className="notice">{openFoodFactsWarning}</p>}
+            {!usdaKeySaved && <p className="notice">Add your USDA key in Net Carb Settings before lookup. Manual net-carb entry still works.</p>}
             <button className="ghost-button" type="button" disabled={lookupLoading} onClick={() => void handleLookupSearch()}>
               <Search aria-hidden="true" size={18} />
               Search
@@ -3584,9 +3843,19 @@ function App() {
               <p>bike or trailer logs</p>
             </Card>
             <Card>
-              <p className="eyebrow">Hill/trailer minutes</p>
-              <strong className="metric-value">{hillTrailerMinutes}</strong>
-              <p>logged ride conditioning minutes</p>
+              <p className="eyebrow">Walk sessions</p>
+              <strong className="metric-value">{walkSessions}</strong>
+              <p>walk or ruck logs</p>
+            </Card>
+            <Card>
+              <p className="eyebrow">Ruck minutes</p>
+              <strong className="metric-value">{ruckMinutes}</strong>
+              <p>logged pack-carry minutes</p>
+            </Card>
+            <Card>
+              <p className="eyebrow">Dog walk miles</p>
+              <strong className="metric-value">{Math.round(dogWalkMiles * 10) / 10}</strong>
+              <p>logged dog walk distance</p>
             </Card>
           </section>
           <Card>
@@ -3600,6 +3869,10 @@ function App() {
           <Card>
             <h2>Total Logged Minutes</h2>
             <BarList data={minutesPerWeek(logs)} unit="m" />
+          </Card>
+          <Card>
+            <h2>Hill / Trailer Minutes</h2>
+            <BarList data={[{ label: 'Total', value: hillTrailerMinutes }]} unit="m" />
           </Card>
           <Card>
             <h2>Estimated Volume By Exercise</h2>
@@ -3870,6 +4143,37 @@ function App() {
           <Card>
             <div className="section-title">
               <div>
+                <p className="eyebrow">Defaults</p>
+                <h2>Walk, ruck, bench</h2>
+              </div>
+              <button className="icon-button" type="button" aria-label="Save walk ruck bench defaults" onClick={() => void handleSaveSettings()}>
+                <Save aria-hidden="true" size={18} />
+              </button>
+            </div>
+            <div className="form-grid">
+              <NumberStepper label="Commute" value={settingsDraft.commuteDefaultMiles ?? 1.2} min={0} max={20} step={0.1} suffix=" mi" quickOptions={[1, 1.2, 1.5, 2, 3]} onChange={(value) => setSettingsDraft({ ...settingsDraft, commuteDefaultMiles: value ?? 1.2 })} />
+              <NumberStepper label="Dog walk" value={settingsDraft.dogWalkDefaultMiles ?? 2.5} min={0} max={20} step={0.5} suffix=" mi" quickOptions={[2, 2.5, 3, 4]} onChange={(value) => setSettingsDraft({ ...settingsDraft, dogWalkDefaultMiles: value ?? 2.5 })} />
+              <NumberStepper label="Ruck water" value={settingsDraft.ruckDefaultWaterLiters ?? 1} min={0} max={12} step={0.5} suffix=" L" quickOptions={[0.5, 1, 1.5, 2, 3]} onChange={(value) => setSettingsDraft({ ...settingsDraft, ruckDefaultWaterLiters: value ?? 1 })} />
+              <NumberStepper label="Empty pack" value={settingsDraft.ruckEmptyPackWeight ?? 2} min={0} max={20} step={0.5} suffix=" lb" quickOptions={[1, 2, 3, 4]} onChange={(value) => setSettingsDraft({ ...settingsDraft, ruckEmptyPackWeight: value ?? 2 })} />
+              <NumberStepper label="Extra ruck" value={settingsDraft.ruckDefaultExtraWeight ?? 0} min={0} max={100} step={1} suffix=" lb" quickOptions={[0, 5, 10, 15, 20]} onChange={(value) => setSettingsDraft({ ...settingsDraft, ruckDefaultExtraWeight: value ?? 0 })} />
+              <label>
+                Bench step-ups
+                <span className="inline-check">
+                  <input
+                    checked={settingsDraft.benchStepUpsSafe ?? false}
+                    type="checkbox"
+                    onChange={(event) => setSettingsDraft({ ...settingsDraft, benchStepUpsSafe: event.target.checked })}
+                  />
+                  bench is rated and stable
+                </span>
+              </label>
+            </div>
+            <p className="notice">Step-ups to the portable bench stay off unless this safety box is checked. A 12L rucksack is capacity, not a target load.</p>
+          </Card>
+
+          <Card>
+            <div className="section-title">
+              <div>
                 <p className="eyebrow">App version</p>
                 <h2>{appVersion}</h2>
               </div>
@@ -3930,15 +4234,6 @@ function App() {
                 </span>
               </label>
               <label>
-                FoodData Central API key
-                <input
-                  type="password"
-                  value={carbSettingsDraft.foodDataCentralApiKey ?? ''}
-                  onChange={(event) => setCarbSettingsDraft({ ...carbSettingsDraft, foodDataCentralApiKey: event.target.value })}
-                  placeholder="stored locally"
-                />
-              </label>
-              <label>
                 Preferred lookup source
                 <select
                   value={carbSettingsDraft.preferredNutritionSource}
@@ -3951,15 +4246,43 @@ function App() {
                 >
                   <option value="manual">manual</option>
                   <option value="usda">USDA</option>
-                  <option value="openFoodFacts">Open Food Facts</option>
                 </select>
               </label>
+              <label>
+                USDA FoodData Central key
+                <input
+                  type="password"
+                  value={usdaKeyDraft}
+                  onChange={(event) => setUsdaKeyDraft(event.target.value)}
+                  placeholder={usdaKeySaved ? 'saved locally; paste to replace' : 'paste key to save locally'}
+                  autoComplete="off"
+                />
+              </label>
+              <label>
+                USDA test query
+                <input value={usdaTestQuery} onChange={(event) => setUsdaTestQuery(event.target.value)} placeholder="plain greek yogurt" />
+              </label>
             </div>
-            <p className="notice">Manual entry works offline. The USDA key is stored locally and excluded from normal JSON export.</p>
+            <p className="notice">
+              Manual entry works offline. USDA key saved locally: {usdaKeySaved ? 'yes' : 'no'}. The key is not included in JSON export.
+              {usdaKeyStatus ? ` ${usdaKeyStatus}` : ''}
+            </p>
             <div className="button-grid">
               <button className="ghost-button" type="button" onClick={() => void handleSaveCarbSettings()}>
                 <Save aria-hidden="true" size={18} />
                 Save
+              </button>
+              <button className="ghost-button" type="button" onClick={() => void handleSaveUsdaApiKey()}>
+                <Save aria-hidden="true" size={18} />
+                Save USDA key
+              </button>
+              <button className="ghost-button" type="button" disabled={usdaKeyBusy || !usdaKeySaved} onClick={() => void handleTestUsdaLookup()}>
+                <Search aria-hidden="true" size={18} />
+                Test USDA
+              </button>
+              <button className="ghost-button" type="button" disabled={!usdaKeySaved} onClick={() => void handleClearUsdaApiKey()}>
+                <Trash2 aria-hidden="true" size={18} />
+                Clear USDA key
               </button>
               <button
                 className="ghost-button"
@@ -4197,18 +4520,6 @@ function App() {
               <button className="ghost-button" type="button" onClick={() => void handleExportJson()}>
                 <Download aria-hidden="true" size={18} />
                 JSON
-              </button>
-              <button
-                className="ghost-button"
-                type="button"
-                onClick={() => {
-                  if (window.confirm('Include private local API settings in this JSON export?')) {
-                    void handleExportJson(true)
-                  }
-                }}
-              >
-                <Download aria-hidden="true" size={18} />
-                Private JSON
               </button>
               <button className="ghost-button" type="button" onClick={() => void handleExportCsv()}>
                 <Download aria-hidden="true" size={18} />
