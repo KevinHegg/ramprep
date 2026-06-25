@@ -15,7 +15,11 @@ import {
   verifiedExerciseSources,
 } from './verifiedExerciseSources'
 import { seedExercises } from './seed'
-import { defaultLibraryExerciseIds, optionalSearchOnlyExerciseIds } from './trainingTaxonomy'
+import {
+  defaultLibraryExerciseIds,
+  isDefaultVisibleExerciseId,
+  trainingItemKindForExerciseId,
+} from './trainingTaxonomy'
 
 describe('exercise demo catalog', () => {
   it('has a catalog entry for every priority exercise', () => {
@@ -66,7 +70,8 @@ describe('exercise demo catalog', () => {
     expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('dead-bug'))).toBe(true)
     expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('step-up'))).toBe(true)
     expect(learningActionForDemoMedia(getExerciseDemoMedia('90-90-hip-switch'))).toBe('Read')
-    expect(learningActionForDemoMedia(getExerciseDemoMedia('tibialis-raise'))).toBe('Checklist')
+    expect(learningActionForDemoMedia(getExerciseDemoMedia('commute-walk'))).toBe('Checklist')
+    expect(getExerciseDemoMedia('tibialis-raise')?.qualityStatus).toBe('needsReview')
     expect(getExerciseDemoMedia('sphinx-pose')?.qualityStatus).toBe('needsReview')
     expect(getExerciseDemoMedia('sphinx-pose')?.url).toBe('')
   })
@@ -78,13 +83,18 @@ describe('exercise demo catalog', () => {
     expect(urls.every((url) => !isGenericSourceUrl(url))).toBe(true)
   })
 
-  it('gives default-visible library exercises a Watch, Read, or Checklist action', () => {
-    const defaultVisibleIds = [...defaultLibraryExerciseIds].filter((exerciseId) => !optionalSearchOnlyExerciseIds.has(exerciseId))
+  it('gives default-visible movements Watch or Read and activities Checklist', () => {
+    const defaultVisibleIds = [...defaultLibraryExerciseIds].filter(isDefaultVisibleExerciseId)
 
     expect(
-      defaultVisibleIds.every((exerciseId) =>
-        ['Watch', 'Read', 'Checklist'].includes(learningActionForDemoMedia(getExerciseDemoMedia(exerciseId))),
-      ),
+      defaultVisibleIds
+        .filter((exerciseId) => trainingItemKindForExerciseId(exerciseId) === 'movementExercise')
+        .every((exerciseId) => ['Watch', 'Read'].includes(learningActionForDemoMedia(getExerciseDemoMedia(exerciseId)))),
+    ).toBe(true)
+    expect(
+      defaultVisibleIds
+        .filter((exerciseId) => trainingItemKindForExerciseId(exerciseId) === 'activitySession')
+        .every((exerciseId) => learningActionForDemoMedia(getExerciseDemoMedia(exerciseId)) === 'Checklist'),
     ).toBe(true)
   })
 })

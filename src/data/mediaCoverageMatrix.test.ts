@@ -1,11 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { defaultVisibleMediaCoverageRows, mediaCoverageRows, needsReviewMediaCoverageRows } from './mediaCoverageMatrix'
+import {
+  defaultVisibleMediaCoverageRows,
+  mediaCoverageRows,
+  mediaCoverageSummary,
+  needsReviewMediaCoverageRows,
+} from './mediaCoverageMatrix'
 
 describe('media coverage matrix', () => {
-  it('covers every default-visible exercise with video, article, or checklist behavior', () => {
+  it('covers default-visible movements with video/article and activities with checklists', () => {
     expect(defaultVisibleMediaCoverageRows.length).toBeGreaterThan(30)
-    expect(defaultVisibleMediaCoverageRows.every((row) => ['Watch', 'Read', 'Checklist'].includes(row.behavior))).toBe(true)
+    expect(
+      defaultVisibleMediaCoverageRows
+        .filter((row) => row.kind === 'movementExercise')
+        .every((row) => ['watch', 'read'].includes(row.behavior)),
+    ).toBe(true)
+    expect(
+      defaultVisibleMediaCoverageRows
+        .filter((row) => row.kind === 'activitySession')
+        .every((row) => row.behavior === 'checklist'),
+    ).toBe(true)
     expect(defaultVisibleMediaCoverageRows.every((row) => row.status === 'verified')).toBe(true)
+    expect(mediaCoverageSummary.movementMissingSourceCount).toBe(0)
+    expect(mediaCoverageSummary.genericUrlCount).toBe(0)
   })
 
   it('keeps ride, walk, ruck, and trailer activities on checklist behavior', () => {
@@ -24,12 +40,17 @@ describe('media coverage matrix', () => {
     ]
 
     for (const exerciseId of checklistIds) {
-      expect(mediaCoverageRows.find((row) => row.exerciseId === exerciseId)?.behavior).toBe('Checklist')
+      const row = mediaCoverageRows.find((row) => row.exerciseId === exerciseId)
+
+      expect(row?.kind).toBe('activitySession')
+      expect(row?.behavior).toBe('checklist')
+      expect(row?.sourceType).toBe('checklist')
     }
   })
 
   it('keeps remaining needs-review rows optional or search-only', () => {
     expect(needsReviewMediaCoverageRows.length).toBeGreaterThan(0)
     expect(needsReviewMediaCoverageRows.every((row) => !row.defaultVisible)).toBe(true)
+    expect(needsReviewMediaCoverageRows.every((row) => row.kind === 'movementExercise')).toBe(true)
   })
 })

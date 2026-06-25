@@ -78,13 +78,22 @@ import {
   isVerifiedVideoDemoMedia,
   learningActionForDemoMedia,
 } from './data/exerciseDemoCatalog'
-import { mediaCoverageRows, type MediaCoverageRow } from './data/mediaCoverageMatrix'
+import {
+  activitySessionMediaCoverageRows,
+  mediaCoverageRows,
+  mediaCoverageSummary,
+  movementMediaCoverageRows,
+  optionalSearchOnlyMediaCoverageRows,
+  type MediaCoverageRow,
+} from './data/mediaCoverageMatrix'
 import { primaryNavItems } from './data/navigation'
 import {
   isDefaultLibraryExercise,
+  isActivitySessionExercise,
   isSearchOnlyExercise,
   rampRepGroupForExercise,
   sweatModeLibraryGroups,
+  type LearningBehavior,
 } from './data/trainingTaxonomy'
 import {
   consistencyByDate,
@@ -642,13 +651,18 @@ const ExerciseDemoButton = ({
   allowLocalFallback?: boolean
 }) => {
   const media = getExerciseDemoMedia(exercise.id)
-  const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
-  const label = learningActionForDemoMedia(verifiedMedia, { allowLocalFallback })
+  const activitySession = isActivitySessionExercise(exercise)
+  const movementChecklist = !activitySession && isChecklistDemoMedia(media)
+  const verifiedMedia = isVerifiedDemoMedia(media) && !movementChecklist ? media : undefined
+  const label = activitySession && isChecklistDemoMedia(verifiedMedia)
+    ? 'Checklist'
+    : learningActionForDemoMedia(verifiedMedia, { allowLocalFallback })
   const iconSize = compact ? 16 : 18
   const Icon = label === 'Checklist' ? CheckCircle2 : CircleHelp
 
   if (!verifiedMedia) {
     if (allowLocalFallback) {
+      const fallbackLabel = activitySession ? 'Log activity' : label
       return (
         <button
           className={compact ? 'demo-button compact' : 'demo-button'}
@@ -656,13 +670,13 @@ const ExerciseDemoButton = ({
           onClick={(event) => onOpen(exercise.id, event.currentTarget)}
         >
           <CircleHelp aria-hidden="true" size={iconSize} />
-          <span>{label}</span>
+          <span>{fallbackLabel}</span>
         </button>
       )
     }
 
     return (
-      <span className={compact ? 'demo-status-text compact' : 'demo-status-text'} aria-label={`${exercise.name} needs demo review`}>
+      <span className={compact ? 'demo-status-text compact' : 'demo-status-text'} aria-label={`${exercise.name} needs source review`}>
         <CircleHelp aria-hidden="true" size={iconSize} />
         <span>Needs review</span>
       </span>
@@ -691,7 +705,13 @@ const ExerciseDemoButton = ({
 
 const exerciseDemoStatusText = (exercise: Exercise) => {
   const media = getExerciseDemoMedia(exercise.id)
+  const activitySession = isActivitySessionExercise(exercise)
   const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
+
+  if (activitySession) {
+    return isChecklistDemoMedia(verifiedMedia) ? 'Checklist ready' : 'Log activity'
+  }
+
   const action = learningActionForDemoMedia(verifiedMedia)
 
   if (action === 'Watch') {
@@ -700,8 +720,8 @@ const exerciseDemoStatusText = (exercise: Exercise) => {
   if (action === 'Read') {
     return 'Direct article ready'
   }
-  if (action === 'Checklist') {
-    return 'Checklist ready'
+  if (action === 'How') {
+    return 'How-to ready'
   }
   return 'Needs review'
 }
@@ -718,14 +738,16 @@ const ExerciseDemoView = ({
   onLog: () => void
 }) => {
   const verifiedMedia = isVerifiedDemoMedia(media) ? media : undefined
-  const hasVideo = isVerifiedVideoDemoMedia(verifiedMedia)
-  const hasChecklist = isChecklistDemoMedia(verifiedMedia)
-  const hasSourceTab = Boolean(verifiedMedia)
+  const activitySession = isActivitySessionExercise(exercise)
+  const hasVideo = !activitySession && isVerifiedVideoDemoMedia(verifiedMedia)
+  const hasChecklist = activitySession && isChecklistDemoMedia(verifiedMedia)
+  const hasSourceTab = Boolean(verifiedMedia && !activitySession)
   const sourceHref = verifiedMedia?.sourcePageUrl ?? verifiedMedia?.url
   const [demoTab, setDemoTab] = useState<'watch' | 'do' | 'mistakes' | 'source'>(hasVideo ? 'watch' : 'do')
   const demoSteps = exercise.instructions.slice(0, 5).map(landmarkStep)
   const demoMistakes = exercise.commonMistakes.slice(0, 5)
   const sourceActionLabel = verifiedMedia?.kind === 'youtubeEmbed' ? 'Open in YouTube' : verifiedMedia?.kind === 'externalVideo' ? 'Open video' : 'Open source'
+  const detailLabel = activitySession ? 'Activity checklist' : 'Exercise demo'
 
   return (
     <section className="exercise-demo-view" role="dialog" aria-modal="true" aria-labelledby="demo-title">
@@ -735,7 +757,7 @@ const ExerciseDemoView = ({
           Back
         </button>
         <div>
-          <p className="eyebrow">Exercise demo</p>
+          <p className="eyebrow">{detailLabel}</p>
           <h2 id="demo-title">{exercise.name}</h2>
         </div>
       </header>
@@ -744,21 +766,21 @@ const ExerciseDemoView = ({
         {!verifiedMedia && (
           <div className="demo-review-notice">
             <CircleHelp aria-hidden="true" size={18} />
-            <span>Demo needs review. Local coaching is still available below.</span>
+            <span>{activitySession ? 'Activity checklist needs review. Log fields are still available.' : 'No external source yet. Local coaching is still available below.'}</span>
           </div>
         )}
 
-        <div className="demo-tab-row" role="tablist" aria-label="Exercise demo details">
+        <div className="demo-tab-row" role="tablist" aria-label={activitySession ? 'Activity checklist details' : 'Exercise demo details'}>
           {hasVideo && (
             <button className={demoTab === 'watch' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'watch'} onClick={() => setDemoTab('watch')}>
               Watch
             </button>
           )}
           <button className={demoTab === 'do' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'do'} onClick={() => setDemoTab('do')}>
-            Do
+            {activitySession ? 'Checklist' : 'Do'}
           </button>
           <button className={demoTab === 'mistakes' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'mistakes'} onClick={() => setDemoTab('mistakes')}>
-            Mistakes
+            {activitySession ? 'Safety' : 'Mistakes'}
           </button>
           {hasSourceTab && (
             <button className={demoTab === 'source' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'source'} onClick={() => setDemoTab('source')}>
@@ -770,7 +792,7 @@ const ExerciseDemoView = ({
         {demoTab === 'watch' && hasVideo && (
           <div className="demo-section demo-glance-panel demo-watch-panel">
             <p className="eyebrow">Watch</p>
-            <h3>{verifiedMedia?.title ?? 'Demo needs review'}</h3>
+            <h3>{verifiedMedia?.title ?? 'Source needs review'}</h3>
             {verifiedMedia?.kind === 'youtubeEmbed' && verifiedMedia.embedUrl ? (
               <iframe
                 title={verifiedMedia.title}
@@ -796,7 +818,7 @@ const ExerciseDemoView = ({
 
         {demoTab === 'do' && (
           <div className="demo-section demo-glance-panel">
-            <p className="eyebrow">Do</p>
+            <p className="eyebrow">{activitySession ? 'Checklist' : 'Do'}</p>
             <p className="demo-purpose">{exercise.purpose ?? exercise.description}</p>
             <h3>Setup</h3>
             <p>{exercise.setup ?? 'Choose a stable start and a range you can control.'}</p>
@@ -806,7 +828,8 @@ const ExerciseDemoView = ({
               ))}
             </ol>
             <p className="demo-dose">{exercise.dose ?? prescription({ id: 'demo', routineId: 'demo', exerciseId: exercise.id, section: 'main', order: 1 }, exercise)}</p>
-            {hasChecklist && <p className="demo-checklist-note">Use this as the session checklist, then log distance, load, effort, or notes from the workout screen.</p>}
+            {hasChecklist && <p className="demo-checklist-note">Use this before the session, then log duration, distance, load, effort, and notes from the Ride screen.</p>}
+            {!verifiedMedia && !activitySession && <p className="demo-checklist-note">No external source yet. This local how-to stays out of default media coverage until a direct source is reviewed.</p>}
             {exercise.safety?.length ? (
               <div className="demo-stop-list">
                 <h3>Stop if</h3>
@@ -822,7 +845,7 @@ const ExerciseDemoView = ({
 
         {demoTab === 'mistakes' && (
           <div className="demo-section demo-glance-panel">
-            <p className="eyebrow">Mistakes</p>
+            <p className="eyebrow">{activitySession ? 'Safety' : 'Mistakes'}</p>
             <ul className="demo-big-list">
               {demoMistakes.map((mistake, mistakeIndex) => (
                 <li key={`${exercise.id}-mistake-${mistakeIndex}`}>{mistake}</li>
@@ -864,7 +887,7 @@ const ExerciseDemoView = ({
                 Reviewed <strong>{verifiedMedia?.reviewedAtISO?.slice(0, 10) ?? 'pending'}</strong>
               </span>
               <span>
-                Type <strong>{hasChecklist ? 'Checklist' : hasVideo ? 'Video' : 'Article'}</strong>
+                Type <strong>{hasVideo ? 'Video' : 'Article'}</strong>
               </span>
             </div>
             <p>{verifiedMedia?.attributionText ?? 'RampRep has local instructions, but no reviewed exercise-specific external source yet.'}</p>
@@ -879,7 +902,7 @@ const ExerciseDemoView = ({
         )}
 
         <p className="demo-attribution">
-          {verifiedMedia?.attributionText ?? 'No verified motion media is attached yet.'}
+          {verifiedMedia?.attributionText ?? (activitySession ? 'No verified activity checklist is attached yet.' : 'No verified motion media is attached yet.')}
           {verifiedMedia?.licenseName ? ` License: ${verifiedMedia.licenseName}.` : ''}
           {exercise.sourceReferences?.length ? ` Source: ${exercise.sourceReferences[0].provider}.` : ''}
         </p>
@@ -888,7 +911,7 @@ const ExerciseDemoView = ({
       <footer className="demo-view-footer">
         <button className="primary-button" type="button" onClick={onLog}>
           <Plus aria-hidden="true" size={18} />
-          Log this
+          {activitySession ? 'Log activity' : 'Log this'}
         </button>
         <button className="ghost-button" type="button" onClick={onClose}>
           <ArrowLeft aria-hidden="true" size={18} />
@@ -899,12 +922,25 @@ const ExerciseDemoView = ({
   )
 }
 
+const behaviorLabels: Record<LearningBehavior, string> = {
+  watch: 'Watch',
+  read: 'Read',
+  localHow: 'How',
+  checklist: 'Checklist',
+  needsReview: 'Needs review',
+}
+
 const MediaCoveragePanel = ({ onFlash }: { onFlash: (message: string) => void }) => {
   const copyJson = async (row: MediaCoverageRow, override?: Partial<MediaCoverageRow>) => {
     const payload = { ...row, ...override }
     await navigator.clipboard?.writeText(JSON.stringify(payload, null, 2))
     onFlash(override?.status === 'needsReview' ? 'Needs-review media row copied.' : 'Media row JSON copied.')
   }
+  const sections = [
+    { title: 'Movement exercises', rows: movementMediaCoverageRows },
+    { title: 'Activity sessions', rows: activitySessionMediaCoverageRows },
+    { title: 'Optional/search-only', rows: optionalSearchOnlyMediaCoverageRows },
+  ]
 
   return (
     <Card className="media-coverage-card">
@@ -915,50 +951,65 @@ const MediaCoveragePanel = ({ onFlash }: { onFlash: (message: string) => void })
         </div>
         <span className="tag">{mediaCoverageRows.length} rows</span>
       </div>
-      <div className="media-coverage-grid" role="table" aria-label="Exercise media coverage matrix">
-        {mediaCoverageRows.map((row) => (
-          <div className="media-coverage-row" role="row" key={row.exerciseId}>
-            <div>
-              <strong>{row.exerciseName}</strong>
-              <span>{row.defaultVisible ? 'Default visible' : 'Optional/search-only'}</span>
-            </div>
-            <div>
-              <span>{row.sourceType}</span>
-              <strong>{row.provider}</strong>
-            </div>
-            <div>
-              <span>{row.behavior}</span>
-              <strong>{row.status}</strong>
-            </div>
-            <div>
-              <span>Reviewed {row.reviewedAtISO ? row.reviewedAtISO.slice(0, 10) : 'pending'}</span>
-              <small>{row.directUrl || row.statusReason}</small>
-            </div>
-            <div className="media-coverage-actions">
-              {row.directUrl ? (
-                <a className="ghost-button compact-cta" href={row.directUrl} target="_blank" rel="noreferrer">
-                  <ExternalLink aria-hidden="true" size={16} />
-                  Open source
-                </a>
-              ) : (
-                <span className="demo-status-text compact">Local checklist</span>
-              )}
-              <button
-                className="ghost-button compact-cta"
-                type="button"
-                onClick={() => void copyJson(row, { status: 'needsReview', statusReason: `QA marked for review from ${row.status}.` })}
-              >
-                <CircleHelp aria-hidden="true" size={16} />
-                Mark needs review
-              </button>
-              <button className="ghost-button compact-cta" type="button" onClick={() => void copyJson(row)}>
-                <Copy aria-hidden="true" size={16} />
-                Copy JSON
-              </button>
-            </div>
-          </div>
-        ))}
+      <div className="media-summary-grid" aria-label="Media coverage summary">
+        <span>Movement videos <strong>{mediaCoverageSummary.movementVideoCount}</strong></span>
+        <span>Movement articles <strong>{mediaCoverageSummary.movementArticleCount}</strong></span>
+        <span>Movement missing <strong>{mediaCoverageSummary.movementMissingSourceCount}</strong></span>
+        <span>Activity checklists <strong>{mediaCoverageSummary.activityChecklistCount}</strong></span>
+        <span>Generic URLs <strong>{mediaCoverageSummary.genericUrlCount}</strong></span>
       </div>
+      {sections.map((section) => (
+        <section className="media-coverage-section" key={section.title}>
+          <div className="section-title compact">
+            <h3>{section.title}</h3>
+            <span className="tag">{section.rows.length}</span>
+          </div>
+          <div className="media-coverage-grid" role="table" aria-label={`${section.title} media coverage matrix`}>
+            {section.rows.map((row) => (
+              <div className="media-coverage-row" role="row" key={row.exerciseId}>
+                <div>
+                  <strong>{row.exerciseName}</strong>
+                  <span>{row.defaultVisible ? 'Default visible' : 'Optional/search-only'}</span>
+                </div>
+                <div>
+                  <span>{row.kind}</span>
+                  <strong>{row.sourceType}</strong>
+                </div>
+                <div>
+                  <span>{behaviorLabels[row.behavior]}</span>
+                  <strong>{row.status}</strong>
+                </div>
+                <div>
+                  <span>{row.provider}</span>
+                  <small>{row.directUrl || row.issue || row.statusReason}</small>
+                </div>
+                <div className="media-coverage-actions">
+                  {row.directUrl ? (
+                    <a className="ghost-button compact-cta" href={row.directUrl} target="_blank" rel="noreferrer">
+                      <ExternalLink aria-hidden="true" size={16} />
+                      Open source
+                    </a>
+                  ) : (
+                    <span className="demo-status-text compact">{row.sourceType === 'checklist' ? 'Checklist only' : 'Review queue'}</span>
+                  )}
+                  <button
+                    className="ghost-button compact-cta"
+                    type="button"
+                    onClick={() => void copyJson(row, { status: 'needsReview', statusReason: `QA marked for review from ${row.status}.` })}
+                  >
+                    <CircleHelp aria-hidden="true" size={16} />
+                    Mark needs review
+                  </button>
+                  <button className="ghost-button compact-cta" type="button" onClick={() => void copyJson(row)}>
+                    <Copy aria-hidden="true" size={16} />
+                    Copy JSON
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
     </Card>
   )
 }

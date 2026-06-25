@@ -1,5 +1,8 @@
 import type { Exercise } from '../types'
 
+export type TrainingItemKind = 'movementExercise' | 'activitySession'
+export type LearningBehavior = 'watch' | 'read' | 'localHow' | 'checklist' | 'needsReview'
+
 export const sweatModeLibraryGroups = [
   'Core Armor',
   'Back & Posture',
@@ -20,6 +23,48 @@ export const optionalSearchOnlyExerciseIds = new Set([
   'cobra-pose',
   'childs-pose-side-reach',
   'rear-foot-elevated-split-squat',
+  'cat-cow',
+  'low-lunge-hip-flexor-stretch',
+  'figure-four-stretch',
+  'hamstring-stretch',
+  'thoracic-open-book',
+  'couch-stretch',
+  'ankle-rocks',
+  'split-squat',
+  'reverse-lunge',
+  'band-pull-apart',
+  'band-face-pull',
+  'band-external-rotation',
+  'step-up-to-bench',
+  'suitcase-carry',
+  'glute-bridge-march',
+  'mcgill-curl-up',
+  'calf-raise',
+  'soleus-raise',
+  'tibialis-raise',
+  'wall-sit',
+  'loaded-carry-for-trailer-days',
+])
+
+export const activitySessionExerciseIds = new Set([
+  'easy-endurance-ride',
+  'recovery-spin',
+  'hill-repeat-ride',
+  'low-cadence-climb-intervals',
+  'loaded-gravel-ride',
+  'easy-tour-specificity-session',
+  'walk-hike',
+  'commute-walk',
+  'dog-walk',
+  'dog-walk-light-ruck',
+  'hydration-ruck-walk',
+  'ruck-commute',
+  'easy-posture-ruck',
+  'ruck-hill-walk',
+  'trailer-walk',
+  'burley-loaded-trailer-ride',
+  'trailer-hill-starts',
+  'controlled-trailer-towing-workout',
 ])
 
 export const defaultLibraryExerciseGroups: Record<SweatModeLibraryGroup, string[]> = {
@@ -117,3 +162,18 @@ export const isDefaultLibraryExercise = (exercise: Pick<Exercise, 'id'>) =>
   defaultLibraryExerciseIds.has(exercise.id) && !optionalSearchOnlyExerciseIds.has(exercise.id)
 
 export const isSearchOnlyExercise = (exercise: Pick<Exercise, 'id'>) => optionalSearchOnlyExerciseIds.has(exercise.id)
+
+export const isDefaultVisibleExerciseId = (exerciseId: string) =>
+  defaultLibraryExerciseIds.has(exerciseId) && !optionalSearchOnlyExerciseIds.has(exerciseId)
+
+export const trainingItemKindForExercise = (exercise: Pick<Exercise, 'id' | 'group'>): TrainingItemKind =>
+  activitySessionExerciseIds.has(exercise.id) ? 'activitySession' : 'movementExercise'
+
+export const trainingItemKindForExerciseId = (exerciseId: string): TrainingItemKind =>
+  activitySessionExerciseIds.has(exerciseId) ? 'activitySession' : 'movementExercise'
+
+export const isActivitySessionExercise = (exercise: Pick<Exercise, 'id' | 'group'>) =>
+  trainingItemKindForExercise(exercise) === 'activitySession'
+
+export const isMovementExercise = (exercise: Pick<Exercise, 'id' | 'group'>) =>
+  trainingItemKindForExercise(exercise) === 'movementExercise'

@@ -3,7 +3,12 @@ import {
   type ExerciseMediaSource,
   type ExerciseMediaSourceKind,
 } from '../data/verifiedExerciseSources'
-import { defaultLibraryExerciseIds, optionalSearchOnlyExerciseIds } from '../data/trainingTaxonomy'
+import {
+  defaultLibraryExerciseIds,
+  optionalSearchOnlyExerciseIds,
+  trainingItemKindForExerciseId,
+  type LearningBehavior,
+} from '../data/trainingTaxonomy'
 
 export interface ExerciseSourceValidationIssue {
   exerciseId: string
@@ -11,25 +16,25 @@ export interface ExerciseSourceValidationIssue {
   message: string
 }
 
-export type ExerciseSourceBehavior = 'Watch' | 'Read' | 'Checklist' | 'Needs review'
+export type ExerciseSourceBehavior = LearningBehavior
 
-const verifiedCoverageKinds = new Set<ExerciseMediaSourceKind>(['youtubeVideo', 'externalVideo', 'externalArticle', 'checklist'])
+const verifiedMovementCoverageKinds = new Set<ExerciseMediaSourceKind>(['youtubeVideo', 'externalVideo', 'externalArticle'])
 const videoKinds = new Set<ExerciseMediaSourceKind>(['youtubeVideo', 'externalVideo'])
 
 export const behaviorForExerciseSource = (source?: Pick<ExerciseMediaSource, 'sourceKind' | 'qualityStatus'>): ExerciseSourceBehavior => {
   if (!source || source.qualityStatus !== 'verified') {
-    return 'Needs review'
+    return 'needsReview'
   }
   if (videoKinds.has(source.sourceKind)) {
-    return 'Watch'
+    return 'watch'
   }
   if (source.sourceKind === 'externalArticle') {
-    return 'Read'
+    return 'read'
   }
   if (source.sourceKind === 'checklist') {
-    return 'Checklist'
+    return 'checklist'
   }
-  return 'Needs review'
+  return 'needsReview'
 }
 
 export const isGenericVerifiedUrl = (url: string) => {
@@ -75,8 +80,18 @@ export const validateExerciseSources = (
 
   for (const source of sources) {
     const behavior = behaviorForExerciseSource(source)
-    if (behavior === 'Watch' && !videoKinds.has(source.sourceKind)) {
+    const itemKind = trainingItemKindForExerciseId(source.exerciseId)
+
+    if (behavior === 'watch' && !videoKinds.has(source.sourceKind)) {
       issues.push({ exerciseId: source.exerciseId, field: 'sourceKind', message: 'Watch behavior requires video media.' })
+    }
+
+    if (itemKind === 'movementExercise' && source.sourceKind === 'checklist' && source.isDefaultLearningSource) {
+      issues.push({ exerciseId: source.exerciseId, field: 'sourceKind', message: 'Movement exercises cannot use a local checklist as primary media; add a direct video/article or mark needsReview.' })
+    }
+
+    if (itemKind === 'activitySession' && source.isDefaultLearningSource && source.sourceKind !== 'checklist') {
+      issues.push({ exerciseId: source.exerciseId, field: 'sourceKind', message: 'Activity sessions use local checklists/logging only, not Watch or Read media.' })
     }
 
     if (source.qualityStatus !== 'verified') {
@@ -113,15 +128,26 @@ export const validateExerciseSources = (
       continue
     }
 
+    const itemKind = trainingItemKindForExerciseId(exerciseId)
     const defaultSource = sources.find((source) => source.exerciseId === exerciseId && source.isDefaultLearningSource)
-    const hasCoverage = Boolean(
+
+    if (itemKind === 'activitySession') {
+      const hasActivityChecklist = Boolean(defaultSource?.qualityStatus === 'verified' && defaultSource.sourceKind === 'checklist')
+
+      if (!hasActivityChecklist) {
+        issues.push({ exerciseId, field: 'sourceKind', message: 'Default visible activity sessions need verified local checklist/logging coverage.' })
+      }
+      continue
+    }
+
+    const hasMovementCoverage = Boolean(
       defaultSource &&
         defaultSource.qualityStatus === 'verified' &&
-        verifiedCoverageKinds.has(defaultSource.sourceKind),
+        verifiedMovementCoverageKinds.has(defaultSource.sourceKind),
     )
 
-    if (!hasCoverage) {
-      issues.push({ exerciseId, field: 'sourceKind', message: 'Default visible exercise needs verified video, article, or checklist coverage.' })
+    if (!hasMovementCoverage) {
+      issues.push({ exerciseId, field: 'sourceKind', message: 'Default visible movement exercises need verified direct video or article coverage.' })
     }
   }
 

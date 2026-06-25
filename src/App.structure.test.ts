@@ -124,12 +124,13 @@ describe('mobile UI structure', () => {
   })
 
   it('keeps demo media honest when sources need review', () => {
-    expect(appSource).toContain('Demo needs review')
+    expect(appSource).toContain('No external source yet')
+    expect(appSource).toContain('Activity checklist')
     expect(appSource).toContain('demo-tab-row')
     expect(appSource).toContain('Watch')
     expect(appSource).toContain('Read')
     expect(appSource).toContain('Checklist')
-    expect(appSource).toContain('Mistakes')
+    expect(appSource).toContain('Safety')
     expect(appSource).toContain('MediaCoveragePanel')
     expect(appSource).toContain('editMode && <MediaCoveragePanel')
     expect(appSource).not.toContain('Demo needed')

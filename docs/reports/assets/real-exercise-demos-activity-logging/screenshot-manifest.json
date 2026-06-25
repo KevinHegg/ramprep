@@ -1,0 +1,198 @@
+{
+  "shots": [
+    {
+      "name": "01-library-default-390.png",
+      "label": "Library default - movements show Watch/Read and activities show Checklist",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/01-library-default-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "02-movement-watch-dead-bug-390.png",
+      "label": "Movement Watch - dead bug YouTube embed",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/02-movement-watch-dead-bug-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "03-movement-read-90-90-390.png",
+      "label": "Movement Read - 90/90 direct article flow",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/03-movement-read-90-90-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "04-activity-checklist-commute-390.png",
+      "label": "Activity checklist - commute walk",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/04-activity-checklist-commute-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "05-activity-log-default-390.png",
+      "label": "Activity log - default ride/walk/ruck fields",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/05-activity-log-default-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "06-ruck-log-pack-load-390.png",
+      "label": "Ruck log - pack load and soreness fields",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/06-ruck-log-pack-load-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "07-dog-walk-log-390.png",
+      "label": "Dog walk log - quick distances",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/07-dog-walk-log-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "08-burley-log-total-load-390.png",
+      "label": "Burley log - dog comfort and total towed load",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/08-burley-log-total-load-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "09-media-qa-summary-390.png",
+      "label": "Media QA - grouped coverage summary",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/09-media-qa-summary-390.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      }
+    },
+    {
+      "name": "10-library-default-430.png",
+      "label": "Library default - 430 px QA",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/10-library-default-430.png",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      }
+    },
+    {
+      "name": "11-ruck-log-pack-load-430.png",
+      "label": "Ruck log - 430 px QA",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/11-ruck-log-pack-load-430.png",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      }
+    },
+    {
+      "name": "12-media-qa-summary-430.png",
+      "label": "Media QA - 430 px QA",
+      "file": "/Users/kevinhegg/Desktop/ramprep/docs/reports/assets/real-exercise-demos-activity-logging/12-media-qa-summary-430.png",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      }
+    }
+  ],
+  "overflow": [
+    {
+      "label": "Library default - movements show Watch/Read and activities show Checklist",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowX": 0
+    },
+    {
+      "label": "Movement Watch - dead bug YouTube embed",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowX": 0
+    },
+    {
+      "label": "Movement Read - 90/90 direct article flow",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowX": 0
+    },
+    {
+      "label": "Activity checklist - commute walk",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowX": 0
+    },
+    {
+      "label": "Activity log - default ride/walk/ruck fields",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowX": 0
+    },
+    {
+      "label": "Ruck log - pack load and soreness fields",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowX": 0
+    },
+    {
+      "label": "Dog walk log - quick distances",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowX": 0
+    },
+    {
+      "label": "Burley log - dog comfort and total towed load",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowX": 0
+    },
+    {
+      "label": "Media QA - grouped coverage summary",
+      "clientWidth": 390,
+      "scrollWidth": 390,
+      "bodyScrollWidth": 390,
+      "overflowX": 0
+    },
+    {
+      "label": "Library default - 430 px QA",
+      "clientWidth": 430,
+      "scrollWidth": 430,
+      "bodyScrollWidth": 430,
+      "overflowX": 0
+    },
+    {
+      "label": "Ruck log - 430 px QA",
+      "clientWidth": 430,
+      "scrollWidth": 430,
+      "bodyScrollWidth": 430,
+      "overflowX": 0
+    },
+    {
+      "label": "Media QA - 430 px QA",
+      "clientWidth": 430,
+      "scrollWidth": 430,
+      "bodyScrollWidth": 430,
+      "overflowX": 0
+    }
+  ]
+}

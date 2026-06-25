@@ -53,11 +53,42 @@ describe('exercise source validation', () => {
     expect(issues.map((issue) => issue.field)).toEqual(expect.arrayContaining(['youtubeVideoId', 'embedUrl']))
   })
 
-  it('maps Watch only to video, Read only to article, and Checklist only to checklist', () => {
-    expect(behaviorForExerciseSource({ sourceKind: 'youtubeVideo', qualityStatus: 'verified' })).toBe('Watch')
-    expect(behaviorForExerciseSource({ sourceKind: 'externalVideo', qualityStatus: 'verified' })).toBe('Watch')
-    expect(behaviorForExerciseSource({ sourceKind: 'externalArticle', qualityStatus: 'verified' })).toBe('Read')
-    expect(behaviorForExerciseSource({ sourceKind: 'checklist', qualityStatus: 'verified' })).toBe('Checklist')
-    expect(behaviorForExerciseSource({ sourceKind: 'none', qualityStatus: 'needsReview' })).toBe('Needs review')
+  it('maps source records to lowercase learning behavior contracts', () => {
+    expect(behaviorForExerciseSource({ sourceKind: 'youtubeVideo', qualityStatus: 'verified' })).toBe('watch')
+    expect(behaviorForExerciseSource({ sourceKind: 'externalVideo', qualityStatus: 'verified' })).toBe('watch')
+    expect(behaviorForExerciseSource({ sourceKind: 'externalArticle', qualityStatus: 'verified' })).toBe('read')
+    expect(behaviorForExerciseSource({ sourceKind: 'checklist', qualityStatus: 'verified' })).toBe('checklist')
+    expect(behaviorForExerciseSource({ sourceKind: 'none', qualityStatus: 'needsReview' })).toBe('needsReview')
+  })
+
+  it('rejects local checklists as movement exercise media', () => {
+    const issues = validateExerciseSources(
+      [
+        {
+          ...baseSource,
+          sourceKind: 'checklist',
+          directUrl: '',
+        },
+      ],
+      { defaultExerciseIds: ['dead-bug'], optionalExerciseIds: [] },
+    )
+
+    expect(issues.some((issue) => issue.message.includes('Movement exercises cannot use a local checklist'))).toBe(true)
+    expect(issues.some((issue) => issue.message.includes('Default visible movement exercises need verified direct video or article'))).toBe(true)
+  })
+
+  it('rejects Watch or Read sources for activity sessions', () => {
+    const issues = validateExerciseSources(
+      [
+        {
+          ...baseSource,
+          exerciseId: 'commute-walk',
+        },
+      ],
+      { defaultExerciseIds: ['commute-walk'], optionalExerciseIds: [] },
+    )
+
+    expect(issues.some((issue) => issue.message.includes('Activity sessions use local checklists/logging only'))).toBe(true)
+    expect(issues.some((issue) => issue.message.includes('Default visible activity sessions need verified local checklist/logging coverage'))).toBe(true)
   })
 })
