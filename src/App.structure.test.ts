@@ -62,6 +62,12 @@ describe('mobile UI structure', () => {
   it('shows one exercise at a time in active workout mode with 72px actions', () => {
     expect(appSource).toContain('Active workout shows one exercise at a time')
     expect(appSource).toContain('Current exercise only')
+    expect(appSource).toContain('activeWorkoutDraftStorageKey')
+    expect(appSource).toContain('Draft workout restored.')
+    expect(appSource).toContain('Discard this workout draft?')
+    expect(appSource).toContain('Defaults')
+    expect(appSource).toContain('Use last completed')
+    expect(appSource).toContain('Reset to routine target')
     expect(cssSource).toContain('.active-primary')
     expect(cssSource).toContain('min-height: var(--touch-primary)')
     expect(indexCssSource).toContain('--touch-primary: 72px')
@@ -152,6 +158,9 @@ describe('mobile UI structure', () => {
 
     expect(indexSource).toContain('<title>RAMprep</title>')
     expect(manifestSource).toContain('"short_name": "RAMprep"')
+    expect(appSource).toContain('About RAMprep')
+    expect(appSource).toContain('Share RAMprep')
+    expect(appSource).toContain('aria-label="RAMprep"')
     expect(logoSource).toContain('RAM')
     expect(logoSource).toContain('prep')
     expect(existsSync(new URL('../public/favicon.svg', import.meta.url))).toBe(true)

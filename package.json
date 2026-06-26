@@ -11,7 +11,8 @@
     "test": "vitest run",
     "audit:media": "tsx scripts/auditExerciseMedia.ts",
     "audit:guides": "tsx scripts/auditExerciseGuides.ts",
-    "audit:routines": "tsx scripts/auditRoutineCoverage.ts"
+    "audit:routines": "tsx scripts/auditRoutineCoverage.ts",
+    "audit:brand": "tsx scripts/auditBranding.ts"
   },
   "dependencies": {
     "dexie": "^4.4.4",
