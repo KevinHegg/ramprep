@@ -195,6 +195,8 @@ export const ensureV11Seeds = async () => {
         await db.exercises.bulkPut(missingExercises)
       }
       const seededExerciseById = new Map(seedExercises.map((item) => [item.id, item]))
+      const seededRoutineExerciseIds = new Set(seedRoutineExercises.map((item) => item.id))
+      const seededRoutineIds = new Set(seedRoutines.map((item) => item.id))
       const instructionUpdates: Exercise[] = []
 
       existingExercises.forEach((exercise) => {
@@ -220,10 +222,18 @@ export const ensureV11Seeds = async () => {
           JSON.stringify(exercise.formCues) !== JSON.stringify(seededExercise.formCues) ||
           JSON.stringify(exercise.commonMistakes) !== JSON.stringify(seededExercise.commonMistakes) ||
           JSON.stringify(exercise.sourceReferences ?? []) !== JSON.stringify(seededExercise.sourceReferences ?? [])
+        const hasOutdatedSeedMetadata =
+          exercise.name !== seededExercise.name ||
+          JSON.stringify(exercise.equipment) !== JSON.stringify(seededExercise.equipment) ||
+          JSON.stringify(exercise.targetAreas) !== JSON.stringify(seededExercise.targetAreas) ||
+          JSON.stringify(exercise.defaults) !== JSON.stringify(seededExercise.defaults) ||
+          exercise.difficulty !== seededExercise.difficulty ||
+          JSON.stringify(exercise.bikeTourPurpose ?? []) !== JSON.stringify(seededExercise.bikeTourPurpose ?? [])
 
-        if (hasOldGenericInstruction || hasOldTaxonomyOrGuidance || hasOutdatedReviewedGuidance) {
+        if (hasOldGenericInstruction || hasOldTaxonomyOrGuidance || hasOutdatedReviewedGuidance || hasOutdatedSeedMetadata) {
           instructionUpdates.push({
             ...exercise,
+            name: seededExercise.name,
             group: seededExercise.group,
             description: seededExercise.description,
             purpose: seededExercise.purpose,
@@ -236,6 +246,11 @@ export const ensureV11Seeds = async () => {
             dose: seededExercise.dose,
             safety: seededExercise.safety,
             sourceReferences: seededExercise.sourceReferences,
+            targetAreas: seededExercise.targetAreas,
+            equipment: seededExercise.equipment,
+            difficulty: seededExercise.difficulty,
+            bikeTourPurpose: seededExercise.bikeTourPurpose,
+            defaults: seededExercise.defaults,
             updatedAt: nowIso(),
           })
         }
@@ -250,6 +265,17 @@ export const ensureV11Seeds = async () => {
       if (missingRoutineExercises.length) {
         await db.routineExercises.bulkPut(missingRoutineExercises)
       }
+      const retiredSeedRoutineExercises = existingRoutineExercises.filter(
+        (item) =>
+          seededRoutineIds.has(item.routineId) &&
+          item.id.startsWith(`${item.routineId}-`) &&
+          !seededRoutineExerciseIds.has(item.id),
+      )
+
+      if (retiredSeedRoutineExercises.length) {
+        await db.routineExercises.bulkDelete(retiredSeedRoutineExercises.map((item) => item.id))
+      }
+      await db.routineExercises.bulkPut(seedRoutineExercises)
       if (missingMedia.length) {
         await db.exerciseMedia.bulkPut(missingMedia)
       }

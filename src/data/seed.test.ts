@@ -61,10 +61,13 @@ describe('seed exercise guidance', () => {
     const names = seedExercises.map((exercise) => exercise.name.toLowerCase())
     expect(names).toEqual(expect.arrayContaining([
       'chest-supported dumbbell row',
+      'bench-supported one-arm dumbbell row',
       'band face pull',
       'pallof press',
       'suitcase carry',
       'split squat',
+      'floor glute bridge',
+      'bench hip thrust',
       'reverse lunge',
       'step-up',
       'single-leg romanian deadlift',

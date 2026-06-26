@@ -79,9 +79,16 @@ export const optionalSearchOnlyMediaCoverageRows = mediaCoverageRows.filter((row
 export const needsReviewMediaCoverageRows = mediaCoverageRows.filter((row) => row.status === 'needsReview')
 
 export const mediaCoverageSummary = {
+  defaultMovementCount: defaultVisibleMediaCoverageRows.filter((row) => row.kind === 'movementExercise').length,
+  defaultMovementVideoCount: defaultVisibleMediaCoverageRows.filter((row) => row.kind === 'movementExercise' && (row.sourceType === 'youtubeVideo' || row.sourceType === 'externalVideo')).length,
   movementVideoCount: mediaCoverageRows.filter((row) => row.kind === 'movementExercise' && (row.sourceType === 'youtubeVideo' || row.sourceType === 'externalVideo')).length,
   movementArticleCount: mediaCoverageRows.filter((row) => row.kind === 'movementExercise' && row.sourceType === 'externalArticle').length,
-  movementMissingSourceCount: defaultVisibleMediaCoverageRows.filter((row) => row.kind === 'movementExercise' && row.behavior === 'needsReview').length,
+  movementMissingSourceCount: defaultVisibleMediaCoverageRows.filter((row) => row.kind === 'movementExercise' && row.behavior !== 'watch').length,
   activityChecklistCount: mediaCoverageRows.filter((row) => row.kind === 'activitySession' && row.sourceType === 'checklist').length,
   genericUrlCount: mediaCoverageRows.filter((row) => row.directUrl && isGenericVerifiedUrl(row.directUrl)).length,
 }
+
+export const defaultMovementVideoCoveragePercent =
+  mediaCoverageSummary.defaultMovementCount === 0
+    ? 100
+    : Math.round((mediaCoverageSummary.defaultMovementVideoCount / mediaCoverageSummary.defaultMovementCount) * 100)

@@ -61,6 +61,12 @@ describe('exercise source validation', () => {
     expect(behaviorForExerciseSource({ sourceKind: 'none', qualityStatus: 'needsReview' })).toBe('needsReview')
   })
 
+  it('rejects article-only coverage for default movement exercises', () => {
+    const issues = validateExerciseSources([baseSource], { defaultExerciseIds: ['dead-bug'], optionalExerciseIds: [] })
+
+    expect(issues.some((issue) => issue.message.includes('Default visible movement exercises need verified direct video coverage'))).toBe(true)
+  })
+
   it('rejects local checklists as movement exercise media', () => {
     const issues = validateExerciseSources(
       [
@@ -74,7 +80,7 @@ describe('exercise source validation', () => {
     )
 
     expect(issues.some((issue) => issue.message.includes('Movement exercises cannot use a local checklist'))).toBe(true)
-    expect(issues.some((issue) => issue.message.includes('Default visible movement exercises need verified direct video or article'))).toBe(true)
+    expect(issues.some((issue) => issue.message.includes('Default visible movement exercises need verified direct video coverage'))).toBe(true)
   })
 
   it('rejects Watch or Read sources for activity sessions', () => {

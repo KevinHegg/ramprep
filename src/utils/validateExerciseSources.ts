@@ -18,7 +18,6 @@ export interface ExerciseSourceValidationIssue {
 
 export type ExerciseSourceBehavior = LearningBehavior
 
-const verifiedMovementCoverageKinds = new Set<ExerciseMediaSourceKind>(['youtubeVideo', 'externalVideo', 'externalArticle'])
 const videoKinds = new Set<ExerciseMediaSourceKind>(['youtubeVideo', 'externalVideo'])
 
 export const behaviorForExerciseSource = (source?: Pick<ExerciseMediaSource, 'sourceKind' | 'qualityStatus'>): ExerciseSourceBehavior => {
@@ -143,11 +142,11 @@ export const validateExerciseSources = (
     const hasMovementCoverage = Boolean(
       defaultSource &&
         defaultSource.qualityStatus === 'verified' &&
-        verifiedMovementCoverageKinds.has(defaultSource.sourceKind),
+        videoKinds.has(defaultSource.sourceKind),
     )
 
     if (!hasMovementCoverage) {
-      issues.push({ exerciseId, field: 'sourceKind', message: 'Default visible movement exercises need verified direct video or article coverage.' })
+      issues.push({ exerciseId, field: 'sourceKind', message: 'Default visible movement exercises need verified direct video coverage.' })
     }
   }
 

@@ -9,7 +9,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "audit:media": "tsx scripts/auditExerciseMedia.ts"
+    "audit:media": "tsx scripts/auditExerciseMedia.ts",
+    "audit:guides": "tsx scripts/auditExerciseGuides.ts"
   },
   "dependencies": {
     "dexie": "^4.4.4",

@@ -4,15 +4,16 @@ import {
   mediaCoverageRows,
   mediaCoverageSummary,
   needsReviewMediaCoverageRows,
+  defaultMovementVideoCoveragePercent,
 } from './mediaCoverageMatrix'
 
 describe('media coverage matrix', () => {
-  it('covers default-visible movements with video/article and activities with checklists', () => {
+  it('covers default-visible movements with verified videos and activities with checklists', () => {
     expect(defaultVisibleMediaCoverageRows.length).toBeGreaterThan(30)
     expect(
       defaultVisibleMediaCoverageRows
         .filter((row) => row.kind === 'movementExercise')
-        .every((row) => ['watch', 'read'].includes(row.behavior)),
+        .every((row) => row.behavior === 'watch' && row.sourceType === 'youtubeVideo'),
     ).toBe(true)
     expect(
       defaultVisibleMediaCoverageRows
@@ -20,7 +21,10 @@ describe('media coverage matrix', () => {
         .every((row) => row.behavior === 'checklist'),
     ).toBe(true)
     expect(defaultVisibleMediaCoverageRows.every((row) => row.status === 'verified')).toBe(true)
+    expect(defaultMovementVideoCoveragePercent).toBe(100)
+    expect(mediaCoverageSummary.defaultMovementVideoCount).toBe(mediaCoverageSummary.defaultMovementCount)
     expect(mediaCoverageSummary.movementMissingSourceCount).toBe(0)
+    expect(mediaCoverageSummary.movementArticleCount).toBe(0)
     expect(mediaCoverageSummary.genericUrlCount).toBe(0)
   })
 

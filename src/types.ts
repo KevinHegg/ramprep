@@ -79,6 +79,7 @@ export type BikeTourPurpose =
 export interface ExerciseSourceReference {
   title: string
   provider: string
+  channelName?: string
   url: string
   reviewedAtISO: string
 }
@@ -315,6 +316,7 @@ export interface ExerciseDemoMedia {
   kind: ExerciseDemoMediaKind
   title: string
   provider: string
+  channelName?: string
   url: string
   embedUrl?: string
   youtubeVideoId?: string

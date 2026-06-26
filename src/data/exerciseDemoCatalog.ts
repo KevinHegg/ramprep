@@ -35,6 +35,7 @@ export const exerciseDemoCatalog: ExerciseDemoMedia[] = exerciseMediaSources.map
   kind: kindForSource(source),
   title: source.title,
   provider: source.provider,
+  channelName: source.channelName,
   url: source.directUrl,
   embedUrl: source.embedUrl,
   youtubeVideoId: source.youtubeVideoId,

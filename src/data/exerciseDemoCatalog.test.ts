@@ -65,11 +65,13 @@ describe('exercise demo catalog', () => {
     ).toBe(true)
   })
 
-  it('has working Watch, Read, and Checklist media without upgrading unreviewed demos', () => {
+  it('has working Watch and Checklist media without upgrading unreviewed demos', () => {
     expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('downward-dog'))).toBe(true)
     expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('dead-bug'))).toBe(true)
     expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('step-up'))).toBe(true)
-    expect(learningActionForDemoMedia(getExerciseDemoMedia('90-90-hip-switch'))).toBe('Read')
+    expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('bench-hip-thrust'))).toBe(true)
+    expect(isVerifiedVideoDemoMedia(getExerciseDemoMedia('floor-glute-bridge'))).toBe(true)
+    expect(learningActionForDemoMedia(getExerciseDemoMedia('90-90-hip-switch'))).toBe('Watch')
     expect(learningActionForDemoMedia(getExerciseDemoMedia('commute-walk'))).toBe('Checklist')
     expect(getExerciseDemoMedia('tibialis-raise')?.qualityStatus).toBe('needsReview')
     expect(getExerciseDemoMedia('sphinx-pose')?.qualityStatus).toBe('needsReview')
@@ -83,13 +85,13 @@ describe('exercise demo catalog', () => {
     expect(urls.every((url) => !isGenericSourceUrl(url))).toBe(true)
   })
 
-  it('gives default-visible movements Watch or Read and activities Checklist', () => {
+  it('gives default-visible movements Watch and activities Checklist', () => {
     const defaultVisibleIds = [...defaultLibraryExerciseIds].filter(isDefaultVisibleExerciseId)
 
     expect(
       defaultVisibleIds
         .filter((exerciseId) => trainingItemKindForExerciseId(exerciseId) === 'movementExercise')
-        .every((exerciseId) => ['Watch', 'Read'].includes(learningActionForDemoMedia(getExerciseDemoMedia(exerciseId)))),
+        .every((exerciseId) => learningActionForDemoMedia(getExerciseDemoMedia(exerciseId)) === 'Watch'),
     ).toBe(true)
     expect(
       defaultVisibleIds
