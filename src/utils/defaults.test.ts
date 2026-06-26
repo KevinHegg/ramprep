@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Exercise, ExerciseLogEntry, PersonalExerciseDefault, RoutineExercise, WorkoutLog } from '../types'
-import { defaultKeyForExercise, personalDefaultForExercise, resolveExerciseLogDefaults } from './defaults'
+import { defaultKeyForExercise, mostRecentCompletedEntry, personalDefaultForExercise, resolveExerciseLogDefaults } from './defaults'
 
 const exercise: Exercise = {
   id: 'goblet-squat',
@@ -79,7 +79,7 @@ describe('exercise log defaults', () => {
       reps: '5',
       weight: 45,
       effort: 8,
-      lastSummary: 'Last: 4 x 6, @ 35 lb, effort 7',
+      lastSummary: 'Last completed: 4 × 6 @ 35 lb',
     })
   })
 
@@ -113,6 +113,35 @@ describe('exercise log defaults', () => {
     expect(resolveExerciseLogDefaults({ exercise, personalDefault: { ...personalDefault, reuseLastNote: true } }).notes).toBe(
       'Keep it smooth.',
     )
+  })
+
+  it('keeps completed defaults equipment-specific and ignores skipped entries', () => {
+    const logs: WorkoutLog[] = [
+      {
+        id: 'old',
+        routineName: 'Old',
+        completedAt: '2026-06-20T12:00:00.000Z',
+        status: 'completed',
+        createdAt: '2026-06-20T12:00:00.000Z',
+        updatedAt: '2026-06-20T12:00:00.000Z',
+      },
+      {
+        id: 'new',
+        routineName: 'New',
+        completedAt: '2026-06-21T12:00:00.000Z',
+        status: 'completed',
+        createdAt: '2026-06-21T12:00:00.000Z',
+        updatedAt: '2026-06-21T12:00:00.000Z',
+      },
+    ]
+    const entries: ExerciseLogEntry[] = [
+      { ...recentEntry, id: 'db', workoutLogId: 'old', equipmentKey: 'dumbbell', weight: 35 },
+      { ...recentEntry, id: 'kb', workoutLogId: 'new', equipmentKey: 'kettlebell', weight: 55 },
+      { ...recentEntry, id: 'skipped', workoutLogId: 'new', equipmentKey: 'dumbbell', skipped: true, weight: 100 },
+    ]
+
+    expect(mostRecentCompletedEntry(exercise.id, entries, logs, 'dumbbell')?.weight).toBe(35)
+    expect(mostRecentCompletedEntry(exercise.id, entries, logs, 'kettlebell')?.weight).toBe(55)
   })
 })
 

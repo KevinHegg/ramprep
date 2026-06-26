@@ -21,6 +21,7 @@ import type {
   Exercise,
   ExerciseLogEntry,
   FoodLookupCache,
+  PersonalExerciseDefault,
   PrivateSetting,
   Routine,
   RoutineExercise,
@@ -35,7 +36,13 @@ import type {
 } from '../types'
 import { defaultCarbSettings, normalizeCarbGrams } from '../utils/carbs'
 import { toDateKey } from '../utils/date'
-import { defaultKeyForExercise, mostRecentCompletedEntry, resolveExerciseLogDefaults } from '../utils/defaults'
+import {
+  defaultKeyForExercise,
+  exerciseEquipmentKey,
+  mostRecentCompletedEntry,
+  personalDefaultForExercise,
+  resolveExerciseLogDefaults,
+} from '../utils/defaults'
 
 const nowIso = () => new Date().toISOString()
 export const USDA_API_KEY_PRIVATE_SETTING_KEY = 'usdaFoodDataCentralApiKey'
@@ -69,12 +76,66 @@ const defaultCarbGoalHistory = (timestamp: string): CarbGoalHistory => ({
   createdAt: timestamp,
 })
 
+const numericCustomFields = (fields?: ExerciseLogEntry['customFields']) => {
+  if (!fields) {
+    return undefined
+  }
+
+  const numericEntries = Object.entries(fields).filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+  return numericEntries.length ? Object.fromEntries(numericEntries) : undefined
+}
+
+const defaultPayloadFromEntry = (
+  entry: ExerciseLogEntry,
+  log: WorkoutLog,
+  equipmentKey: string,
+): PersonalExerciseDefault => ({
+  id: defaultKeyForExercise(entry.exerciseId, equipmentKey),
+  exerciseId: entry.exerciseId,
+  equipmentKey,
+  sets: entry.sets,
+  reps: entry.reps,
+  weight: entry.weight,
+  durationSeconds: entry.durationSeconds,
+  distance: entry.distance,
+  effort: entry.effort,
+  customFields: numericCustomFields(entry.customFields),
+  updatedAt: nowIso(),
+  source: 'last-log',
+  sourceWorkoutLogId: log.id,
+  sourceExerciseLogEntryId: entry.id,
+  sourceCompletedAt: log.completedAt,
+})
+
+const resolveEquipmentKeyForEntry = (entry: Pick<ExerciseLogEntry, 'exerciseId' | 'equipmentKey'>, exercises: Exercise[]) =>
+  entry.equipmentKey ?? exerciseEquipmentKey(exercises.find((exercise) => exercise.id === entry.exerciseId))
+
+const normalizeDraftEntryForLog = (entry: WorkoutDraftEntry, exercises: Exercise[]): WorkoutDraftEntry => ({
+  ...entry,
+  equipmentKey: resolveEquipmentKeyForEntry(entry, exercises),
+})
+
+export const normalizeStoredExerciseLogEquipmentKeys = async () => {
+  const [entries, exercises] = await Promise.all([db.exerciseLogEntries.toArray(), db.exercises.toArray()])
+  const normalizedEntries = entries
+    .filter((entry) => !entry.equipmentKey)
+    .map((entry) => ({
+      ...entry,
+      equipmentKey: resolveEquipmentKeyForEntry(entry, exercises),
+    }))
+
+  if (normalizedEntries.length) {
+    await db.exerciseLogEntries.bulkPut(normalizedEntries)
+  }
+}
+
 export const initializeAppData = async () => {
   const settings = await db.settings.get('default')
   if (settings) {
     await ensureV11Seeds()
     await ensureV13CarbDefaults()
     await migrateLegacyUsdaKeyToPrivateSetting()
+    await rebuildAllPersonalExerciseDefaults()
     return
   }
 
@@ -110,6 +171,7 @@ export const initializeAppData = async () => {
     },
   )
   await migrateLegacyUsdaKeyToPrivateSetting()
+  await rebuildAllPersonalExerciseDefaults()
 }
 
 export const ensureV13CarbDefaults = async () => {
@@ -685,10 +747,82 @@ export const saveEquipment = async (equipment: Equipment) => {
   await db.equipment.put(equipment)
 }
 
-export const updateExerciseDefaultsFromLog = async (entry: ExerciseLogEntry) => {
-  const equipmentKey = entry.equipmentKey ?? 'bodyweight'
+export const rebuildPersonalDefaultForExercise = async (exerciseId: string, equipmentKey = 'bodyweight') => {
+  const defaultId = defaultKeyForExercise(exerciseId, equipmentKey)
+  const existing = await db.personalExerciseDefaults.get(defaultId)
 
-  await db.personalExerciseDefaults.put({
+  if (existing?.source === 'user') {
+    return existing
+  }
+
+  const [logs, entries] = await Promise.all([
+    db.workoutLogs.orderBy('completedAt').reverse().toArray(),
+    db.exerciseLogEntries.where('exerciseId').equals(exerciseId).toArray(),
+  ])
+  const recentEntry = mostRecentCompletedEntry(exerciseId, entries, logs, equipmentKey)
+
+  if (!recentEntry) {
+    if (existing?.source === 'last-log') {
+      await db.personalExerciseDefaults.delete(defaultId)
+    }
+    return undefined
+  }
+
+  const sourceLog = logs.find((log) => log.id === recentEntry.workoutLogId)
+  if (!sourceLog) {
+    return undefined
+  }
+
+  const nextDefault = defaultPayloadFromEntry(recentEntry, sourceLog, equipmentKey)
+  await db.personalExerciseDefaults.put(nextDefault)
+  return nextDefault
+}
+
+export const rebuildPersonalDefaultsForEntries = async (entries: Array<Pick<ExerciseLogEntry, 'exerciseId' | 'equipmentKey'>>) => {
+  const exercises = await db.exercises.toArray()
+  const keys = new Map<string, { exerciseId: string; equipmentKey: string }>()
+
+  entries.forEach((entry) => {
+    const equipmentKey = resolveEquipmentKeyForEntry(entry, exercises)
+    keys.set(`${entry.exerciseId}::${equipmentKey}`, { exerciseId: entry.exerciseId, equipmentKey })
+  })
+
+  await Promise.all([...keys.values()].map((entry) => rebuildPersonalDefaultForExercise(entry.exerciseId, entry.equipmentKey)))
+}
+
+export const rebuildAllPersonalExerciseDefaults = async () => {
+  await normalizeStoredExerciseLogEquipmentKeys()
+
+  const [entries, defaults, exercises] = await Promise.all([
+    db.exerciseLogEntries.toArray(),
+    db.personalExerciseDefaults.toArray(),
+    db.exercises.toArray(),
+  ])
+  const keys = new Map<string, { exerciseId: string; equipmentKey: string }>()
+
+  entries.forEach((entry) => {
+    const equipmentKey = resolveEquipmentKeyForEntry(entry, exercises)
+    keys.set(`${entry.exerciseId}::${equipmentKey}`, { exerciseId: entry.exerciseId, equipmentKey })
+  })
+  defaults
+    .filter((item) => item.source === 'last-log' && item.equipmentKey)
+    .forEach((item) => {
+      keys.set(`${item.exerciseId}::${item.equipmentKey}`, { exerciseId: item.exerciseId, equipmentKey: item.equipmentKey! })
+    })
+
+  await Promise.all([...keys.values()].map((entry) => rebuildPersonalDefaultForExercise(entry.exerciseId, entry.equipmentKey)))
+}
+
+export const updateExerciseDefaultsFromLog = async (entry: ExerciseLogEntry) => {
+  const exercises = await db.exercises.toArray()
+  return rebuildPersonalDefaultForExercise(entry.exerciseId, resolveEquipmentKeyForEntry(entry, exercises))
+}
+
+export const savePinnedExerciseDefault = async (entry: WorkoutDraftEntry | ExerciseLogEntry) => {
+  const exercises = await db.exercises.toArray()
+  const equipmentKey = resolveEquipmentKeyForEntry(entry, exercises)
+  const now = nowIso()
+  const pinned: PersonalExerciseDefault = {
     id: defaultKeyForExercise(entry.exerciseId, equipmentKey),
     exerciseId: entry.exerciseId,
     equipmentKey,
@@ -698,9 +832,22 @@ export const updateExerciseDefaultsFromLog = async (entry: ExerciseLogEntry) => 
     durationSeconds: entry.durationSeconds,
     distance: entry.distance,
     effort: entry.effort,
-    updatedAt: nowIso(),
-    source: 'last-log',
-  })
+    customFields: numericCustomFields(entry.customFields),
+    updatedAt: now,
+    source: 'user',
+  }
+
+  await db.personalExerciseDefaults.put(pinned)
+  return pinned
+}
+
+export const clearPinnedExerciseDefault = async (exerciseId: string, equipmentKey = 'bodyweight') => {
+  const defaultId = defaultKeyForExercise(exerciseId, equipmentKey)
+  const existing = await db.personalExerciseDefaults.get(defaultId)
+  if (existing?.source === 'user') {
+    await db.personalExerciseDefaults.delete(defaultId)
+  }
+  return rebuildPersonalDefaultForExercise(exerciseId, equipmentKey)
 }
 
 export const getExerciseLogDefaults = async (
@@ -710,12 +857,12 @@ export const getExerciseLogDefaults = async (
   units = 'lb',
   equipmentKey = 'bodyweight',
 ) => {
-  const [personalDefault, logs, entries] = await Promise.all([
-    db.personalExerciseDefaults.get(defaultKeyForExercise(exerciseId, equipmentKey)),
+  const [defaults, logs, entries] = await Promise.all([
+    db.personalExerciseDefaults.where('exerciseId').equals(exerciseId).toArray(),
     db.workoutLogs.orderBy('completedAt').reverse().toArray(),
     db.exerciseLogEntries.where('exerciseId').equals(exerciseId).toArray(),
   ])
-  const fallbackDefault = personalDefault ?? (await db.personalExerciseDefaults.get(`default-${exerciseId}`))
+  const fallbackDefault = personalDefaultForExercise(defaults, exerciseId, equipmentKey)
   const recentEntry = mostRecentCompletedEntry(exerciseId, entries, logs, equipmentKey)
   return resolveExerciseLogDefaults({ exercise, routineExercise, personalDefault: fallbackDefault, recentEntry, units })
 }
@@ -727,6 +874,7 @@ export const createWorkoutLog = async (
 ) => {
   const timestamp = nowIso()
   const fullRoutine = routine.id ? await db.routines.get(routine.id) : undefined
+  const exercises = await db.exercises.toArray()
   const shouldAdvanceRotation = Boolean(fullRoutine && normalizeRoutineRole(fullRoutine) === 'rotation')
   const rotationState = shouldAdvanceRotation
     ? normalizeRoutineRotationState(await db.routineRotationStates.get('default'), timestamp)
@@ -746,22 +894,24 @@ export const createWorkoutLog = async (
     updatedAt: timestamp,
   }
 
-  const logEntries: ExerciseLogEntry[] = entries.map((entry) => ({
-    ...entry,
-    id: createId('entry'),
-    workoutLogId,
-  }))
+  const logEntries: ExerciseLogEntry[] = entries
+    .filter((entry) => !entry.skipped)
+    .map((entry) => ({
+      ...normalizeDraftEntryForLog(entry, exercises),
+      id: createId('entry'),
+      workoutLogId,
+    }))
 
-  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, db.personalExerciseDefaults, db.routineRotationStates, async () => {
+  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, db.routineRotationStates, async () => {
     await db.workoutLogs.add(workoutLog)
     if (logEntries.length) {
       await db.exerciseLogEntries.bulkAdd(logEntries)
-      await Promise.all(logEntries.map(updateExerciseDefaultsFromLog))
     }
     if (shouldAdvanceRotation && rotationState && routine.id) {
       await db.routineRotationStates.put(advanceRoutineRotationState(rotationState, routine.id, timestamp))
     }
   })
+  await rebuildPersonalDefaultsForEntries(logEntries)
 
   return workoutLogId
 }
@@ -797,23 +947,35 @@ export const createSkippedWorkout = async (
 }
 
 export const updateWorkoutLog = async (log: WorkoutLog, entries: ExerciseLogEntry[]) => {
-  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, db.personalExerciseDefaults, async () => {
+  const [previousEntries, exercises] = await Promise.all([
+    db.exerciseLogEntries.where('workoutLogId').equals(log.id).toArray(),
+    db.exercises.toArray(),
+  ])
+  const normalizedEntries = entries
+    .filter((entry) => !entry.skipped)
+    .map((entry) => ({
+      ...entry,
+      equipmentKey: resolveEquipmentKeyForEntry(entry, exercises),
+      workoutLogId: log.id,
+    }))
+
+  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, async () => {
     await db.workoutLogs.put({ ...log, updatedAt: nowIso() })
     await db.exerciseLogEntries.where('workoutLogId').equals(log.id).delete()
-    if (entries.length) {
-      await db.exerciseLogEntries.bulkAdd(entries.map((entry) => ({ ...entry, workoutLogId: log.id })))
-      if (log.status === 'completed') {
-        await Promise.all(entries.map(updateExerciseDefaultsFromLog))
-      }
+    if (normalizedEntries.length) {
+      await db.exerciseLogEntries.bulkAdd(normalizedEntries)
     }
   })
+  await rebuildPersonalDefaultsForEntries([...previousEntries, ...normalizedEntries])
 }
 
 export const deleteWorkoutLog = async (logId: string) => {
+  const deletedEntries = await db.exerciseLogEntries.where('workoutLogId').equals(logId).toArray()
   await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, async () => {
     await db.workoutLogs.delete(logId)
     await db.exerciseLogEntries.where('workoutLogId').equals(logId).delete()
   })
+  await rebuildPersonalDefaultsForEntries(deletedEntries)
 }
 
 export const exportAllData = async (_options: { includePrivateSettings?: boolean } = {}) => {
@@ -912,6 +1074,7 @@ export const importAllData = async (rawJson: string) => {
       await db.foodLookupCache.bulkAdd(data.foodLookupCache ?? [])
     },
   )
+  await rebuildAllPersonalExerciseDefaults()
 }
 
 const csvCell = (value: unknown) => {

@@ -35,6 +35,7 @@ import './App.css'
 import {
   addExerciseToRoutine,
   clearFoodLookupCache,
+  clearPinnedExerciseDefault,
   createCarbEntry,
   createSkippedWorkout,
   createWorkoutLog,
@@ -62,6 +63,7 @@ import {
   saveEquipment,
   saveExercise,
   saveFoodLookupCache,
+  savePinnedExerciseDefault,
   savePrivateSetting,
   saveRoutine,
   saveRoutineExercise,
@@ -169,6 +171,25 @@ type Page = 'dashboard' | 'train' | 'ride' | 'workouts' | 'log' | 'carbs' | 'pro
 type WorkoutsTab = 'routines' | 'library'
 type LogMode = 'recommended' | 'routine' | 'free'
 type ActiveWorkoutStage = 'workout' | 'review'
+interface ActiveWorkoutState {
+  stage: ActiveWorkoutStage
+  currentIndex: number
+  startedAt: number
+  routineName: string
+  routineId?: string
+}
+
+interface ActiveWorkoutDraftSnapshot {
+  version: 1
+  activeWorkout: ActiveWorkoutState
+  draftEntries: WorkoutDraftEntry[]
+  selectedRoutineId: string
+  logMode: LogMode
+  durationMinutes: number
+  logNotes: string
+  savedAt: string
+}
+
 type RideTemplate =
   | 'Start ride log'
   | 'Hill repeats'
@@ -212,6 +233,7 @@ const navIconByPage: Record<(typeof primaryNavItems)[number]['page'], typeof Act
 const appVersion = `${__APP_COMMIT__} · ${new Date(__APP_BUILD_DATE__).toLocaleDateString()}`
 
 const activeWorkoutPrimaryActions = ['Done', '+ Set', 'Skip']
+const activeWorkoutDraftStorageKey = 'ramprep-active-workout-draft-v1'
 
 const rideTemplateExerciseId: Record<RideTemplate, string> = {
   'Start ride log': 'easy-endurance-ride',
@@ -402,6 +424,7 @@ const buildDraftEntries = (
         effort: remembered.effort,
         notes: remembered.notes ?? entry.notes,
         lastSummary: remembered.lastSummary,
+        customFields: remembered.customFields,
       }
     })
 }
@@ -1078,12 +1101,7 @@ function App() {
   const demoLauncherRef = useRef<HTMLElement | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [draftEntries, setDraftEntries] = useState<WorkoutDraftEntry[]>([])
-  const [activeWorkout, setActiveWorkout] = useState<{
-    stage: ActiveWorkoutStage
-    currentIndex: number
-    startedAt: number
-    routineName: string
-  } | null>(null)
+  const [activeWorkout, setActiveWorkout] = useState<ActiveWorkoutState | null>(null)
   const [skipPromptRoutine, setSkipPromptRoutine] = useState<Routine | null>(null)
   const [skipAdvancesRotation, setSkipAdvancesRotation] = useState(false)
   const [routineBrowserOpen, setRoutineBrowserOpen] = useState(false)
@@ -1143,6 +1161,7 @@ function App() {
   })
   const [roadmapConflictDraft, setRoadmapConflictDraft] = useState({ startsOn: '', endsOn: '', note: '' })
   const [historyExerciseName, setHistoryExerciseName] = useState('')
+  const activeWorkoutDraftRestoredRef = useRef(false)
 
   const refresh = useCallback(async () => {
     const [snapshot, usdaPrivateSetting] = await Promise.all([
@@ -1203,6 +1222,40 @@ function App() {
     return () => window.removeEventListener('ramprep:update-ready', handleUpdateReady)
   }, [])
 
+  useEffect(() => {
+    if (!data || activeWorkoutDraftRestoredRef.current || activeWorkout) {
+      return
+    }
+
+    activeWorkoutDraftRestoredRef.current = true
+    const rawDraft = window.localStorage.getItem(activeWorkoutDraftStorageKey)
+    if (!rawDraft) {
+      return
+    }
+
+    try {
+      const snapshot = JSON.parse(rawDraft) as ActiveWorkoutDraftSnapshot
+      if (snapshot.version !== 1 || !snapshot.activeWorkout || !Array.isArray(snapshot.draftEntries)) {
+        window.localStorage.removeItem(activeWorkoutDraftStorageKey)
+        return
+      }
+
+      window.setTimeout(() => {
+        setSelectedRoutineId(snapshot.selectedRoutineId)
+        setDraftEntries(snapshot.draftEntries)
+        setLogMode(snapshot.logMode)
+        setDurationMinutes(snapshot.durationMinutes)
+        setLogNotes(snapshot.logNotes)
+        setActiveWorkout(snapshot.activeWorkout)
+        setPage('train')
+        setFlash('Draft workout restored.')
+        window.setTimeout(() => setFlash(''), 3200)
+      }, 0)
+    } catch {
+      window.localStorage.removeItem(activeWorkoutDraftStorageKey)
+    }
+  }, [activeWorkout, data])
+
   const deloadApplied = data ? isDeloadWeek(today, data.schedule.deloadEveryFourthWeek) : false
   const streak = data ? calculateConsistencyStreak(logs, today) : 0
   const selectedRoutineExercises = selectedRoutine
@@ -1216,6 +1269,24 @@ function App() {
         ? draftEntries
         : buildDraftEntries(selectedRoutine, data, deloadApplied)
       : []
+
+  useEffect(() => {
+    if (!activeWorkout) {
+      return
+    }
+
+    const snapshot: ActiveWorkoutDraftSnapshot = {
+      version: 1,
+      activeWorkout,
+      draftEntries,
+      selectedRoutineId,
+      logMode,
+      durationMinutes,
+      logNotes,
+      savedAt: new Date().toISOString(),
+    }
+    window.localStorage.setItem(activeWorkoutDraftStorageKey, JSON.stringify(snapshot))
+  }, [activeWorkout, draftEntries, selectedRoutineId, logMode, durationMinutes, logNotes])
 
   const pulseFeedback = () => {
     if ('vibrate' in navigator && typeof navigator.vibrate === 'function') {
@@ -1259,6 +1330,7 @@ function App() {
       currentIndex: 0,
       startedAt: new Date().getTime(),
       routineName: routine.name,
+      routineId: routine.id,
     })
     setPage('train')
   }
@@ -1363,6 +1435,92 @@ function App() {
     })
   }
 
+  const clearActiveWorkoutDraft = () => {
+    window.localStorage.removeItem(activeWorkoutDraftStorageKey)
+  }
+
+  const discardActiveWorkoutDraft = () => {
+    if (!window.confirm('Discard this workout draft?')) {
+      return
+    }
+
+    clearActiveWorkoutDraft()
+    setActiveWorkout(null)
+    setDraftEntries([])
+    setPage('train')
+  }
+
+  const routineExerciseForDraftEntry = (entry?: WorkoutDraftEntry) =>
+    entry?.routineExerciseId ? routineExercises.find((item) => item.id === entry.routineExerciseId) : undefined
+
+  const applyLastCompletedToDraftEntry = (index: number) => {
+    const entry = visibleDraftEntries[index]
+    const exercise = exerciseById.get(entry?.exerciseId ?? '')
+    if (!entry || !exercise || !data) {
+      return
+    }
+
+    const equipmentKey = entry.equipmentKey ?? exerciseEquipmentKey(exercise)
+    const recentEntry = mostRecentCompletedEntry(exercise.id, data.exerciseLogEntries, data.workoutLogs, equipmentKey)
+    if (!recentEntry) {
+      showFlash('No completed value yet for this exercise and equipment.')
+      return
+    }
+
+    updateDraftEntryAt(index, (current) => ({
+      ...current,
+      equipmentKey,
+      sets: recentEntry.sets,
+      reps: recentEntry.reps,
+      weight: recentEntry.weight,
+      durationSeconds: recentEntry.durationSeconds,
+      distance: recentEntry.distance,
+      effort: recentEntry.effort ?? current.effort,
+      customFields: recentEntry.customFields ?? current.customFields,
+      lastSummary: resolveExerciseLogDefaults({
+        exercise,
+        routineExercise: routineExerciseForDraftEntry(current),
+        recentEntry,
+        units: data.settings.units,
+      }).lastSummary,
+    }))
+  }
+
+  const resetDraftEntryToRoutineTarget = (index: number) => {
+    const entry = visibleDraftEntries[index]
+    const exercise = exerciseById.get(entry?.exerciseId ?? '')
+    if (!entry || !exercise) {
+      return
+    }
+
+    const routineExercise = routineExerciseForDraftEntry(entry)
+    updateDraftEntryAt(index, (current) => ({
+      ...current,
+      sets: routineExercise?.sets ?? exercise.defaults.sets,
+      reps: routineExercise?.reps ?? exercise.defaults.reps,
+      weight: exercise.defaults.weight,
+      durationSeconds: routineExercise?.durationSeconds ?? exercise.defaults.durationSeconds,
+      distance: routineExercise?.distance ?? exercise.defaults.distance,
+      effort: exercise.defaults.effort ?? 6,
+      customFields: undefined,
+      lastSummary: undefined,
+    }))
+  }
+
+  const saveCurrentAsPinnedDefault = async (entry: WorkoutDraftEntry) => {
+    await savePinnedExerciseDefault(entry)
+    await refresh()
+    showFlash('Pinned default saved.', true)
+  }
+
+  const clearPinnedDefaultForEntry = async (entry: WorkoutDraftEntry) => {
+    const exercise = exerciseById.get(entry.exerciseId)
+    const equipmentKey = entry.equipmentKey ?? exerciseEquipmentKey(exercise)
+    await clearPinnedExerciseDefault(entry.exerciseId, equipmentKey)
+    await refresh()
+    showFlash('Pinned default cleared.', true)
+  }
+
   const repeatActiveSet = (index: number) => {
     setDraftEntries((current) => {
       const base = current.length ? current : visibleDraftEntries
@@ -1393,6 +1551,15 @@ function App() {
 
     setActiveWorkout({ ...activeWorkout, currentIndex: activeWorkout.currentIndex + 1 })
     pulseFeedback()
+  }
+
+  const skipActiveExercise = () => {
+    if (!activeWorkout) {
+      return
+    }
+
+    updateDraftEntryAt(activeWorkout.currentIndex, (entry) => ({ ...entry, skipped: true }))
+    advanceActiveWorkout()
   }
 
   const handleSkipRoutine = async (reason: SkipReason, advanceRotation = skipAdvancesRotation) => {
@@ -1604,6 +1771,7 @@ function App() {
       travelMode: data?.schedule.travelMode,
       deloadApplied,
     })
+    clearActiveWorkoutDraft()
     setLogNotes('')
     setActiveWorkout(null)
     await refresh()
@@ -1652,6 +1820,7 @@ function App() {
         currentIndex: 0,
         startedAt: new Date().getTime(),
         routineName: 'Free workout',
+        routineId: undefined,
       })
       setPage('train')
       return
@@ -2192,9 +2361,10 @@ function App() {
   const activeWorkoutEntry = activeWorkout ? visibleDraftEntries[clamp(activeWorkout.currentIndex, 0, Math.max(0, visibleDraftEntries.length - 1))] : undefined
   const activeWorkoutExercise = activeWorkoutEntry ? exerciseById.get(activeWorkoutEntry.exerciseId) : undefined
   const activeWorkoutProgress = activeWorkout ? `${Math.min(activeWorkout.currentIndex + 1, visibleDraftEntries.length)} of ${visibleDraftEntries.length}` : ''
+  const activeWorkoutRoutineExercise = routineExerciseForDraftEntry(activeWorkoutEntry)
   const activeWorkoutTarget = activeWorkoutEntry
     ? [
-        activeWorkoutEntry.sets && activeWorkoutEntry.reps ? `${activeWorkoutEntry.sets} x ${activeWorkoutEntry.reps}` : activeWorkoutEntry.reps,
+        activeWorkoutEntry.sets && activeWorkoutEntry.reps ? `${activeWorkoutEntry.sets} × ${activeWorkoutEntry.reps}` : activeWorkoutEntry.reps,
         activeWorkoutEntry.weight ? `@ ${activeWorkoutEntry.weight} ${data.settings.units}` : '',
         activeWorkoutEntry.durationSeconds ? formatDuration(activeWorkoutEntry.durationSeconds) : '',
         activeWorkoutEntry.distance ?? '',
@@ -2202,6 +2372,24 @@ function App() {
         .filter(Boolean)
         .join(' ')
     : ''
+  const activeWorkoutRoutineTarget =
+    activeWorkoutEntry && activeWorkoutExercise
+      ? [
+          (activeWorkoutRoutineExercise?.sets ?? activeWorkoutExercise.defaults.sets) &&
+          (activeWorkoutRoutineExercise?.reps ?? activeWorkoutExercise.defaults.reps)
+            ? `${activeWorkoutRoutineExercise?.sets ?? activeWorkoutExercise.defaults.sets} × ${
+                activeWorkoutRoutineExercise?.reps ?? activeWorkoutExercise.defaults.reps
+              }`
+            : activeWorkoutRoutineExercise?.reps ?? activeWorkoutExercise.defaults.reps,
+          activeWorkoutExercise.defaults.weight ? `@ ${activeWorkoutExercise.defaults.weight} ${data.settings.units}` : '',
+          (activeWorkoutRoutineExercise?.durationSeconds ?? activeWorkoutExercise.defaults.durationSeconds)
+            ? formatDuration(activeWorkoutRoutineExercise?.durationSeconds ?? activeWorkoutExercise.defaults.durationSeconds)
+            : '',
+          activeWorkoutRoutineExercise?.distance ?? activeWorkoutExercise.defaults.distance ?? '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : ''
   const activeWorkoutElapsedMinutes = activeWorkout ? durationMinutes : 0
 
   return (
@@ -2209,21 +2397,7 @@ function App() {
       <header className="topbar">
         <div className="brand-lockup">
           <BrandLogo />
-          <div>
-            <p className="eyebrow">Ride Across America Preparation</p>
-            <h1>
-              {page === 'dashboard' && 'Today'}
-              {page === 'train' && 'Train'}
-              {page === 'ride' && 'Ride'}
-              {page === 'workouts' && 'Workouts'}
-              {page === 'log' && 'Workout Log'}
-              {page === 'carbs' && 'Net Carbs'}
-              {page === 'progress' && 'Progress'}
-              {page === 'more' && 'More'}
-              {page === 'settings' && 'Settings'}
-              {page === 'roadmap' && 'Tour Roadmap'}
-            </h1>
-          </div>
+          <span className="brand-subtitle">Ride Across America Preparation</span>
         </div>
         <div className="topbar-actions">
           <div className="status-pill">
@@ -2231,6 +2405,18 @@ function App() {
             {streak} day streak
           </div>
         </div>
+        <h1 className="topbar-title">
+          {page === 'dashboard' && 'Today'}
+          {page === 'train' && 'Train'}
+          {page === 'ride' && 'Ride'}
+          {page === 'workouts' && 'Workouts'}
+          {page === 'log' && 'Workout Log'}
+          {page === 'carbs' && 'Net Carbs'}
+          {page === 'progress' && 'Progress'}
+          {page === 'more' && 'More'}
+          {page === 'settings' && 'Settings'}
+          {page === 'roadmap' && 'Tour Roadmap'}
+        </h1>
       </header>
 
       {demoExercise && (
@@ -2542,7 +2728,7 @@ function App() {
       {page === 'train' && activeWorkout?.stage === 'workout' && activeWorkoutEntry && (
         <main className="active-workout-mode" aria-label="Active workout shows one exercise at a time">
           <header className="active-workout-top">
-            <button className="demo-back-button" type="button" onClick={() => setActiveWorkout(null)}>
+            <button className="demo-back-button" type="button" onClick={discardActiveWorkoutDraft}>
               <ArrowLeft aria-hidden="true" size={19} />
               Back
             </button>
@@ -2556,11 +2742,33 @@ function App() {
             <p className="eyebrow">Current exercise only</p>
             <h2>{activeWorkoutEntry.exerciseName}</h2>
             <strong className="active-target">{activeWorkoutTarget || 'Open set'}</strong>
-            {activeWorkoutEntry.lastSummary && <p className="last-summary">{activeWorkoutEntry.lastSummary}</p>}
+            {activeWorkoutEntry.lastSummary ? (
+              <p className="last-summary">{activeWorkoutEntry.lastSummary}</p>
+            ) : (
+              activeWorkoutRoutineTarget && <p className="last-summary">Routine target: {activeWorkoutRoutineTarget}</p>
+            )}
             <div className="active-demo-row">
               {activeWorkoutExercise && <ExerciseDemoButton exercise={activeWorkoutExercise} onOpen={openExerciseDemo} allowLocalFallback />}
             </div>
           </section>
+
+          <details className="active-collapsible defaults-collapsible">
+            <summary>Defaults</summary>
+            <div className="defaults-action-grid">
+              <button className="ghost-button compact-cta" type="button" onClick={() => applyLastCompletedToDraftEntry(activeWorkout.currentIndex)}>
+                Use last completed
+              </button>
+              <button className="ghost-button compact-cta" type="button" onClick={() => resetDraftEntryToRoutineTarget(activeWorkout.currentIndex)}>
+                Reset to routine target
+              </button>
+              <button className="ghost-button compact-cta" type="button" onClick={() => void saveCurrentAsPinnedDefault(activeWorkoutEntry)}>
+                Save current as pinned default
+              </button>
+              <button className="ghost-button compact-cta" type="button" onClick={() => void clearPinnedDefaultForEntry(activeWorkoutEntry)}>
+                Clear pinned default
+              </button>
+            </div>
+          </details>
 
           <section className="active-stepper-grid">
             <NumberStepper
@@ -2585,6 +2793,14 @@ function App() {
               units={data.settings.units}
               value={activeWorkoutEntry.weight}
               onChange={(value) => updateDraftEntryAt(activeWorkout.currentIndex, (entry) => ({ ...entry, weight: value }))}
+            />
+            <DurationPicker
+              value={activeWorkoutEntry.durationSeconds}
+              onChange={(value) => updateDraftEntryAt(activeWorkout.currentIndex, (entry) => ({ ...entry, durationSeconds: value }))}
+            />
+            <EffortPicker
+              value={activeWorkoutEntry.effort}
+              onChange={(value) => updateDraftEntryAt(activeWorkout.currentIndex, (entry) => ({ ...entry, effort: value }))}
             />
           </section>
 
@@ -2619,7 +2835,7 @@ function App() {
             <button className="ghost-button active-secondary" type="button" onClick={() => repeatActiveSet(activeWorkout.currentIndex)}>
               {activeWorkoutPrimaryActions[1]}
             </button>
-            <button className="ghost-button active-secondary" type="button" onClick={advanceActiveWorkout}>
+            <button className="ghost-button active-secondary" type="button" onClick={skipActiveExercise}>
               {activeWorkoutPrimaryActions[2]}
             </button>
           </footer>
@@ -2639,7 +2855,15 @@ function App() {
             {visibleDraftEntries.map((entry, index) => (
               <div className="review-row" key={`${entry.exerciseId}-${index}`}>
                 <strong>{entry.exerciseName}</strong>
-                <span>{[entry.sets && entry.reps ? `${entry.sets} x ${entry.reps}` : entry.reps, entry.weight ? `${entry.weight} ${data.settings.units}` : '', entry.distance ?? ''].filter(Boolean).join(' · ') || 'done'}</span>
+                <span>
+                  {entry.skipped
+                    ? 'skipped'
+                    : [
+                        entry.sets && entry.reps ? `${entry.sets} × ${entry.reps}` : entry.reps,
+                        entry.weight ? `${entry.weight} ${data.settings.units}` : '',
+                        entry.distance ?? '',
+                      ].filter(Boolean).join(' · ') || 'done'}
+                </span>
               </div>
             ))}
           </section>
@@ -2656,11 +2880,7 @@ function App() {
             <button
               className="danger-button active-secondary"
               type="button"
-              onClick={() => {
-                setActiveWorkout(null)
-                setDraftEntries([])
-                setPage('train')
-              }}
+              onClick={discardActiveWorkoutDraft}
             >
               Discard
             </button>

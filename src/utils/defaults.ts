@@ -8,14 +8,24 @@ export const exerciseEquipmentKey = (exercise?: Pick<Exercise, 'equipment'>) => 
 export const defaultKeyForExercise = (exerciseId: string, equipmentKey?: string) =>
   `default-${exerciseId}-${equipmentKey ?? 'bodyweight'}`
 
+export const userDefaultKeyForExercise = (exerciseId: string, equipmentKey?: string) =>
+  `user-default-${exerciseId}-${equipmentKey ?? 'bodyweight'}`
+
 export const personalDefaultForExercise = (
   defaults: PersonalExerciseDefault[],
   exerciseId: string,
   equipmentKey?: string,
-) =>
-  defaults.find((item) => item.exerciseId === exerciseId && item.equipmentKey === equipmentKey) ??
-  defaults.find((item) => item.id === defaultKeyForExercise(exerciseId, equipmentKey)) ??
-  defaults.find((item) => item.id === `default-${exerciseId}`)
+) => {
+  const matchingEquipment = defaults.filter((item) => item.exerciseId === exerciseId && item.equipmentKey === equipmentKey)
+
+  return (
+    matchingEquipment.find((item) => item.source === 'user') ??
+    defaults.find((item) => item.id === userDefaultKeyForExercise(exerciseId, equipmentKey)) ??
+    matchingEquipment.find((item) => item.source === 'last-log') ??
+    defaults.find((item) => item.id === defaultKeyForExercise(exerciseId, equipmentKey)) ??
+    defaults.find((item) => item.id === `default-${exerciseId}`)
+  )
+}
 
 export const firstNumber = (value?: string | number) => {
   if (value == null) {
@@ -26,20 +36,33 @@ export const firstNumber = (value?: string | number) => {
   return match ? Number(match[0]) : undefined
 }
 
+const formatDuration = (seconds: number) => {
+  if (seconds >= 60 && seconds % 60 === 0) {
+    return `${seconds / 60} min`
+  }
+
+  return `${seconds} sec`
+}
+
 export const formatLastSummary = (entry?: ExerciseLogEntry, units = 'lb') => {
   if (!entry) {
     return ''
   }
 
   const pieces = [
-    entry.sets && entry.reps ? `${entry.sets} x ${entry.reps}` : entry.sets ? `${entry.sets} sets` : entry.reps,
+    entry.sets && entry.reps
+      ? `${entry.sets} × ${entry.reps}`
+      : entry.sets && entry.durationSeconds
+      ? `${entry.sets} × ${formatDuration(entry.durationSeconds)}`
+      : entry.sets
+      ? `${entry.sets} sets`
+      : entry.reps,
     entry.weight ? `@ ${entry.weight} ${units}` : '',
-    entry.durationSeconds ? `${entry.durationSeconds}s` : '',
+    entry.durationSeconds && !(entry.sets && !entry.reps) ? formatDuration(entry.durationSeconds) : '',
     entry.distance ? entry.distance : '',
-    entry.effort ? `effort ${entry.effort}` : '',
   ].filter(Boolean)
 
-  return pieces.length ? `Last: ${pieces.join(', ')}` : ''
+  return pieces.length ? `Last completed: ${pieces.join(' ')}` : ''
 }
 
 export const mostRecentCompletedEntry = (
@@ -60,7 +83,8 @@ export const mostRecentCompletedEntry = (
       (entry) =>
         entry.exerciseId === exerciseId &&
         completedLogById.has(entry.workoutLogId) &&
-        (!equipmentKey || !entry.equipmentKey || entry.equipmentKey === equipmentKey),
+        !entry.skipped &&
+        (!equipmentKey || entry.equipmentKey === equipmentKey),
     )
     .sort((a, b) => {
       const logA = completedLogById.get(a.workoutLogId)?.completedAt ?? ''
@@ -82,16 +106,39 @@ export const resolveExerciseLogDefaults = ({
   recentEntry?: ExerciseLogEntry
   units?: string
 }) => ({
-  sets: personalDefault?.sets ?? recentEntry?.sets ?? routineExercise?.sets ?? exercise?.defaults.sets,
-  reps: personalDefault?.reps ?? recentEntry?.reps ?? routineExercise?.reps ?? exercise?.defaults.reps,
-  weight: personalDefault?.weight ?? recentEntry?.weight ?? exercise?.defaults.weight,
+  sets:
+    personalDefault?.source === 'user'
+      ? personalDefault.sets ?? recentEntry?.sets ?? routineExercise?.sets ?? exercise?.defaults.sets
+      : recentEntry?.sets ?? personalDefault?.sets ?? routineExercise?.sets ?? exercise?.defaults.sets,
+  reps:
+    personalDefault?.source === 'user'
+      ? personalDefault.reps ?? recentEntry?.reps ?? routineExercise?.reps ?? exercise?.defaults.reps
+      : recentEntry?.reps ?? personalDefault?.reps ?? routineExercise?.reps ?? exercise?.defaults.reps,
+  weight:
+    personalDefault?.source === 'user'
+      ? personalDefault.weight ?? recentEntry?.weight ?? exercise?.defaults.weight
+      : recentEntry?.weight ?? personalDefault?.weight ?? exercise?.defaults.weight,
   durationSeconds:
-    personalDefault?.durationSeconds ??
-    recentEntry?.durationSeconds ??
-    routineExercise?.durationSeconds ??
-    exercise?.defaults.durationSeconds,
-  distance: personalDefault?.distance ?? recentEntry?.distance ?? routineExercise?.distance ?? exercise?.defaults.distance,
-  effort: personalDefault?.effort ?? recentEntry?.effort ?? exercise?.defaults.effort ?? 6,
+    personalDefault?.source === 'user'
+      ? personalDefault.durationSeconds ??
+        recentEntry?.durationSeconds ??
+        routineExercise?.durationSeconds ??
+        exercise?.defaults.durationSeconds
+      : recentEntry?.durationSeconds ??
+        personalDefault?.durationSeconds ??
+        routineExercise?.durationSeconds ??
+        exercise?.defaults.durationSeconds,
+  distance:
+    personalDefault?.source === 'user'
+      ? personalDefault.distance ?? recentEntry?.distance ?? routineExercise?.distance ?? exercise?.defaults.distance
+      : recentEntry?.distance ?? personalDefault?.distance ?? routineExercise?.distance ?? exercise?.defaults.distance,
+  effort:
+    personalDefault?.source === 'user'
+      ? personalDefault.effort ?? recentEntry?.effort ?? exercise?.defaults.effort ?? 6
+      : recentEntry?.effort ?? personalDefault?.effort ?? exercise?.defaults.effort ?? 6,
   notes: personalDefault?.reuseLastNote ? personalDefault.noteTemplate : undefined,
+  customFields: personalDefault?.source === 'user'
+    ? personalDefault.customFields ?? recentEntry?.customFields
+    : recentEntry?.customFields ?? personalDefault?.customFields,
   lastSummary: formatLastSummary(recentEntry, units),
 })

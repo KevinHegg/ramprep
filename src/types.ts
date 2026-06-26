@@ -197,6 +197,7 @@ export interface ExerciseLogEntry {
   distance?: string
   effort?: number
   notes?: string
+  skipped?: boolean
   customFields?: Record<string, string | number | boolean | undefined>
 }
 
@@ -327,8 +328,12 @@ export interface PersonalExerciseDefault extends ExerciseDefaults {
   equipmentKey?: string
   updatedAt: string
   source: 'user' | 'last-log'
+  sourceWorkoutLogId?: ID
+  sourceExerciseLogEntryId?: ID
+  sourceCompletedAt?: string
   reuseLastNote?: boolean
   noteTemplate?: string
+  customFields?: Record<string, number>
 }
 
 export type ExerciseMediaType = 'svg-animation' | 'wger-video' | 'wger-image' | 'youtube-link' | 'external-link'
@@ -445,6 +450,7 @@ export interface WorkoutDraftEntry {
   distance?: string
   effort?: number
   notes?: string
+  skipped?: boolean
   lastSummary?: string
   customFields?: Record<string, string | number | boolean | undefined>
 }
