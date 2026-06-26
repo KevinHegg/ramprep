@@ -1,7 +1,15 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from './db'
-import { getAppData, initializeAppData, ensureV11Seeds, USDA_API_KEY_PRIVATE_SETTING_KEY } from './repository'
+import {
+  createSkippedWorkout,
+  createWorkoutLog,
+  exportAllData,
+  getAppData,
+  initializeAppData,
+  ensureV11Seeds,
+  USDA_API_KEY_PRIVATE_SETTING_KEY,
+} from './repository'
 import { seedExercises } from './seed'
 
 beforeEach(async () => {
@@ -91,6 +99,36 @@ describe('seed repository migration', () => {
     expect(data.carbEntries.find((entry) => entry.id === 'carb-preserve')?.netCarbs).toBe(12)
     expect(data.personalExerciseDefaults.find((item) => item.id === 'default-downward-dog-bodyweight')?.durationSeconds).toBe(60)
     expect(privateSetting?.encryptedOrPlainValue).toBe('redacted-test-value')
+  })
+
+  it('initializes and preserves rotation state through completion, skip, and export', async () => {
+    await initializeAppData()
+
+    const initialData = await getAppData()
+    const routineA = initialData.routines.find((routine) => routine.id === 'routine-a-back-hinge-core')!
+
+    expect(initialData.routineRotationState.sequence).toEqual([
+      'routine-a-back-hinge-core',
+      'routine-b-legs-cycling-support',
+      'routine-c-conditioning-circuit',
+      'routine-g-bench-posture-core',
+      'routine-h-hill-armor-load',
+    ])
+    expect(initialData.routineRotationState.nextRoutineId).toBe('routine-a-back-hinge-core')
+
+    await createSkippedWorkout(routineA, 'fatigue')
+    expect((await getAppData()).routineRotationState.nextRoutineId).toBe('routine-a-back-hinge-core')
+
+    await createSkippedWorkout(routineA, 'travel', undefined, { advanceRotation: true })
+    expect((await getAppData()).routineRotationState.nextRoutineId).toBe('routine-b-legs-cycling-support')
+
+    await createWorkoutLog(routineA, [])
+    const afterCompletion = await getAppData()
+    const exported = JSON.parse(await exportAllData()) as { data: { routineRotationState?: unknown } }
+
+    expect(afterCompletion.routineRotationState.nextRoutineId).toBe('routine-b-legs-cycling-support')
+    expect(afterCompletion.routineRotationState.completedRotationHistory.at(-1)?.routineId).toBe('routine-a-back-hinge-core')
+    expect(exported.data.routineRotationState).toBeDefined()
   })
 
   it('updates retired bundled routine rows without rewriting historical exercise logs', async () => {

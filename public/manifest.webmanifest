@@ -1,24 +1,24 @@
 {
-  "name": "RampRep",
-  "short_name": "RampRep",
-  "description": "Sweaty-thumb training, ride logging, and net-carb tracking for Ride Across America Preparation.",
+  "name": "RAMprep — Ride Across America Preparation",
+  "short_name": "RAMprep",
+  "description": "Bike-tour strength, ride, load, recovery, and fueling preparation for riding across America.",
   "start_url": "/ramprep/",
   "scope": "/ramprep/",
   "display": "standalone",
   "background_color": "#f5f3ee",
-  "theme_color": "#1f6f78",
+  "theme_color": "#17313d",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/ramprep/pwa-icon.svg",
+      "src": "/ramprep/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/ramprep/apple-touch-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/ramprep/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
       "purpose": "any"
     }
   ]

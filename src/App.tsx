@@ -42,6 +42,7 @@ import {
   deleteAllCarbEntries,
   deleteCarbEntry,
   deleteCarbPreset,
+  deleteRoutineSessionOverrides,
   deletePrivateSetting,
   deleteRoutineExercise,
   deleteWorkoutLog,
@@ -64,6 +65,7 @@ import {
   savePrivateSetting,
   saveRoutine,
   saveRoutineExercise,
+  saveRoutineSessionOverride,
   saveRoadmap,
   saveSchedule,
   saveSettings,
@@ -89,6 +91,12 @@ import {
 } from './data/mediaCoverageMatrix'
 import { getApprovedExerciseQuickGuide } from './data/exerciseQuickGuides'
 import { primaryNavItems } from './data/navigation'
+import { getNextRotationRoutine, normalizeRoutineRole } from './data/routineRotation'
+import {
+  buildRoutineVariationProposal,
+  slotKindLabels,
+  type RoutineVariationProposal,
+} from './data/routineVariation'
 import {
   isDefaultLibraryExercise,
   isActivitySessionExercise,
@@ -110,8 +118,6 @@ import {
 import {
   calculateConsistencyStreak,
   dayName,
-  getNextRecommendedRoutine,
-  getScheduledRoutineForDate,
   isDeloadWeek,
 } from './utils/schedule'
 import { formatShortDate, toDateKey } from './utils/date'
@@ -151,6 +157,7 @@ import type {
   ExerciseLogEntry,
   Routine,
   RoutineExercise,
+  RoutineSessionOverride,
   SchedulePreference,
   SkipReason,
   UserSettings,
@@ -347,17 +354,29 @@ const buildDraftEntries = (
   routine: Routine,
   data: AppData,
   deloadApplied: boolean,
+  sessionDateISO = toDateKey(new Date()),
 ): WorkoutDraftEntry[] => {
-  const exerciseByName = new Map(data.exercises.map((exercise) => [exercise.name, exercise]))
   const exerciseById = new Map(data.exercises.map((exercise) => [exercise.id, exercise]))
+  const replacementBySlot = new Map<string, string>()
+
+  data.routineSessionOverrides
+    .filter((override) =>
+      override.routineId === routine.id &&
+      (override.scope === 'routineDefault' || (override.scope === 'todayOnly' && override.sessionDateISO === sessionDateISO)),
+    )
+    .sort((left, right) => left.createdAtISO.localeCompare(right.createdAtISO))
+    .forEach((override) => {
+      override.replacements.forEach((replacement) => {
+        replacementBySlot.set(replacement.slotId, replacement.selectedExerciseId)
+      })
+    })
 
   return data.routineExercises
     .filter((entry) => entry.routineId === routine.id)
     .sort((a, b) => a.order - b.order)
     .map((entry) => {
-      const exercise = entry.variationOptions?.[0]
-        ? exerciseByName.get(entry.variationOptions[0]) ?? exerciseById.get(entry.exerciseId)
-        : exerciseById.get(entry.exerciseId)
+      const exerciseId = replacementBySlot.get(entry.id) ?? entry.exerciseId
+      const exercise = exerciseById.get(exerciseId)
       const equipmentKey = exerciseEquipmentKey(exercise)
       const sets = entry.sets ?? exercise?.defaults.sets
       const adjustedSets = deloadApplied && sets && sets > 1 ? Math.max(1, Math.round(sets * 0.7)) : sets
@@ -630,14 +649,13 @@ const EffortPicker = ({ value, onChange }: { value?: number; onChange: (value: n
   />
 )
 
-const LogoMark = () => (
-  <span className="brand-mark" aria-hidden="true">
-    <svg viewBox="0 0 64 64">
-      <circle cx="32" cy="32" r="27" />
-      <path d="M17 40c8-13 17-20 27-22" />
-      <path d="M18 25c11 3 20 9 28 20" />
-      <path d="M32 11v42M11 32h42" />
-    </svg>
+const BrandLogo = () => (
+  <span className="brand-logo" aria-label="RAMprep">
+    <img src={`${import.meta.env.BASE_URL}ramprep-mark.svg`} alt="" aria-hidden="true" />
+    <span>
+      <strong>RAM</strong>
+      <em>prep</em>
+    </span>
   </span>
 )
 
@@ -1067,6 +1085,10 @@ function App() {
     routineName: string
   } | null>(null)
   const [skipPromptRoutine, setSkipPromptRoutine] = useState<Routine | null>(null)
+  const [skipAdvancesRotation, setSkipAdvancesRotation] = useState(false)
+  const [routineBrowserOpen, setRoutineBrowserOpen] = useState(false)
+  const [routinePreviewId, setRoutinePreviewId] = useState('')
+  const [variationProposal, setVariationProposal] = useState<RoutineVariationProposal | null>(null)
   const [logMode, setLogMode] = useState<LogMode>('recommended')
   const [durationMinutes, setDurationMinutes] = useState(30)
   const [logNotes, setLogNotes] = useState('')
@@ -1139,7 +1161,7 @@ function App() {
     void initializeAppData()
       .then(refresh)
       .catch((error) => {
-        setFlash(error instanceof Error ? error.message : 'Unable to load RampRep data.')
+        setFlash(error instanceof Error ? error.message : 'Unable to load RAMprep data.')
         setLoading(false)
       })
   }, [refresh])
@@ -1152,9 +1174,8 @@ function App() {
   const logs = data?.workoutLogs ?? emptyLogs
   const entries = data?.exerciseLogEntries ?? emptyEntries
   const carbEntries = data?.carbEntries ?? emptyCarbEntries
-  const scheduledToday = data ? getScheduledRoutineForDate(today, data.schedule, routines) : null
-  const nextRecommendation = data ? getNextRecommendedRoutine(today, data.schedule, routines) : null
-  const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId) ?? nextRecommendation?.routine ?? enabledRoutines[0]
+  const nextRotationRoutine = data ? getNextRotationRoutine(data.routineRotationState, routines) : null
+  const selectedRoutine = routines.find((routine) => routine.id === selectedRoutineId) ?? nextRotationRoutine ?? enabledRoutines[0]
   const activeRoutineDraft = routineDraft?.id === selectedRoutine?.id ? routineDraft : selectedRoutine
   const activeHistoryExerciseName = historyExerciseName || exercises[0]?.name || ''
   const nextRoadmapMilestone = data?.roadmap.milestones
@@ -1246,6 +1267,86 @@ function App() {
     startActiveRoutine(routineId, 'recommended')
   }
 
+  const proposalToOverride = (
+    proposal: RoutineVariationProposal,
+    scope: RoutineSessionOverride['scope'],
+  ): Omit<RoutineSessionOverride, 'id'> => ({
+    routineId: proposal.routineId,
+    sessionDateISO: toDateKey(today),
+    scope,
+    replacements: proposal.replacements.map((replacement) => ({
+      slotId: replacement.slotId,
+      originalExerciseId: replacement.originalExerciseId,
+      selectedExerciseId: replacement.selectedExerciseId,
+    })),
+    createdAtISO: proposal.createdAtISO,
+  })
+
+  const openVariationPreview = (routineId: string, extraOverrides: RoutineSessionOverride[] = []) => {
+    if (!data) {
+      return
+    }
+
+    const proposal = buildRoutineVariationProposal({
+      routineId,
+      routineExercises: data.routineExercises.filter((entry) => entry.routineId === routineId),
+      exercises: data.exercises,
+      equipment: data.equipment,
+      overrides: [...data.routineSessionOverrides, ...extraOverrides],
+      nowISO: new Date().toISOString(),
+    })
+
+    if (!proposal) {
+      showFlash('No safe video-backed substitutions are available with current equipment.')
+      return
+    }
+
+    setVariationProposal(proposal)
+  }
+
+  const handleApplyVariationToday = async () => {
+    if (!variationProposal) {
+      return
+    }
+
+    await saveRoutineSessionOverride(proposalToOverride(variationProposal, 'todayOnly'))
+    setVariationProposal(null)
+    await refresh()
+    showFlash(`Changed ${variationProposal.changedCount} of ${variationProposal.totalSlots} for today.`, true)
+  }
+
+  const handleMakeVariationDefault = async () => {
+    if (!variationProposal) {
+      return
+    }
+
+    await deleteRoutineSessionOverrides(variationProposal.routineId, 'routineDefault')
+    await saveRoutineSessionOverride(proposalToOverride(variationProposal, 'routineDefault'))
+    setVariationProposal(null)
+    await refresh()
+    showFlash('Routine defaults updated. Original seed remains recoverable.', true)
+  }
+
+  const handleTryDifferentVariation = () => {
+    if (!variationProposal) {
+      return
+    }
+
+    openVariationPreview(variationProposal.routineId, [
+      {
+        ...proposalToOverride(variationProposal, 'todayOnly'),
+        id: `${variationProposal.id}-preview`,
+      },
+    ])
+  }
+
+  const handleRestoreRoutineOriginal = async (routineId: string) => {
+    await deleteRoutineSessionOverrides(routineId)
+    await refresh()
+    setVariationProposal(null)
+    showFlash('Original routine restored.', true)
+  }
+
   const startFreeWorkout = () => {
     setLogMode('free')
     setDraftEntries([])
@@ -1294,15 +1395,16 @@ function App() {
     pulseFeedback()
   }
 
-  const handleSkipRoutine = async (reason: SkipReason) => {
+  const handleSkipRoutine = async (reason: SkipReason, advanceRotation = skipAdvancesRotation) => {
     if (!skipPromptRoutine) {
       return
     }
 
-    await createSkippedWorkout(skipPromptRoutine, reason)
+    await createSkippedWorkout(skipPromptRoutine, reason, undefined, { advanceRotation })
     setSkipPromptRoutine(null)
+    setSkipAdvancesRotation(false)
     await refresh()
-    showFlash('Skipped workout logged.', true)
+    showFlash(advanceRotation ? 'Skipped and moved to the following routine.' : 'Skipped. This routine stays next.', true)
   }
 
   const buildRideDraftForTemplate = (template: RideTemplate, current = rideDraft): RideDraftState => {
@@ -1701,6 +1803,27 @@ function App() {
     )
   }
 
+  const handleShareApp = async () => {
+    const shareUrl = 'https://kevinhegg.github.io/ramprep/'
+    const shareData = {
+      title: 'RAMprep',
+      text: 'Bike-tour strength, ride, load, recovery, and fueling preparation for riding across America.',
+      url: shareUrl,
+    }
+
+    try {
+      if ('share' in navigator && typeof navigator.share === 'function') {
+        await navigator.share(shareData)
+        return
+      }
+      await navigator.clipboard.writeText(shareUrl)
+      showFlash('RAMprep link copied.', true)
+    } catch {
+      await navigator.clipboard.writeText(shareUrl)
+      showFlash('RAMprep link copied.', true)
+    }
+  }
+
   const handleExportCsv = async () => {
     downloadText(`ramprep-workout-logs-${new Date().toISOString().slice(0, 10)}.csv`, await exportWorkoutLogsCsv(), 'text/csv')
   }
@@ -1950,7 +2073,7 @@ function App() {
     return (
       <main className="loading-screen">
         <Dumbbell aria-hidden="true" />
-        <p>Loading RampRep...</p>
+        <p>Loading RAMprep...</p>
       </main>
     )
   }
@@ -2047,7 +2170,18 @@ function App() {
       ? 'Recovery week: reduce intensity, use mobility, and watch soreness before adding volume.'
       : 'Recovery rhythm: keep every fourth week lighter or switch to recovery mode when soreness rises.',
   ]
-  const trainRoutine = scheduledToday ?? nextRecommendation?.routine ?? selectedRoutine
+  const trainRoutine = nextRotationRoutine ?? selectedRoutine
+  const rotationRoutines = routines.filter((routine) => normalizeRoutineRole(routine) === 'rotation').sort((a, b) => a.order - b.order)
+  const recoveryRoutines = routines.filter((routine) => normalizeRoutineRole(routine) === 'supplemental').sort((a, b) => a.order - b.order)
+  const routinePreview = routines.find((routine) => routine.id === routinePreviewId)
+  const routinePreviewEntries = routinePreview
+    ? routineExercises.filter((entry) => entry.routineId === routinePreview.id).sort((a, b) => a.order - b.order)
+    : []
+  const routineDefaultOverrideIds = new Set(
+    data.routineSessionOverrides
+      .filter((override) => override.scope === 'routineDefault')
+      .map((override) => override.routineId),
+  )
   const trainRoutineExercises = trainRoutine
     ? routineExercises
         .filter((entry) => entry.routineId === trainRoutine.id)
@@ -2074,7 +2208,7 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand-lockup">
-          <LogoMark />
+          <BrandLogo />
           <div>
             <p className="eyebrow">Ride Across America Preparation</p>
             <h1>
@@ -2124,19 +2258,198 @@ function App() {
         </button>
       )}
 
+      {routineBrowserOpen && (
+        <section className="routine-browser-view" role="dialog" aria-modal="true" aria-labelledby="routine-browser-title">
+          <header className="routine-browser-header">
+            <button
+              className="demo-back-button"
+              type="button"
+              onClick={() => {
+                setRoutineBrowserOpen(false)
+                setRoutinePreviewId('')
+              }}
+            >
+              <ArrowLeft aria-hidden="true" size={19} />
+              Back
+            </button>
+            <div>
+              <p className="eyebrow">Browse routines</p>
+              <h2 id="routine-browser-title">{routinePreview ? routinePreview.name : 'Routines'}</h2>
+            </div>
+          </header>
+
+          {!routinePreview && (
+            <div className="routine-browser-content">
+              <section className="routine-browser-section">
+                <p className="eyebrow">Rotation</p>
+                <div className="routine-browser-list">
+                  {rotationRoutines.map((routine) => (
+                    <div className="routine-browser-card" key={routine.id}>
+                      <button className="routine-card-main" type="button" onClick={() => setRoutinePreviewId(routine.id)}>
+                        <strong>{routine.name}</strong>
+                        <small>{routine.purpose ?? routine.type}</small>
+                        <small>{routine.estimatedMinutes} min</small>
+                      </button>
+                      <span className="routine-card-actions">
+                        {routine.id === trainRoutine?.id && <span className="tag">Next</span>}
+                        {routineDefaultOverrideIds.has(routine.id) && <span className="tag">Defaults changed</span>}
+                        <button
+                          className="compact-start"
+                          type="button"
+                          onClick={() => {
+                            setRoutineBrowserOpen(false)
+                            startRoutine(routine.id)
+                          }}
+                        >
+                          Start
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="routine-browser-section">
+                <p className="eyebrow">Recovery &amp; Mobility</p>
+                <div className="routine-browser-list">
+                  {recoveryRoutines.map((routine) => (
+                    <div className="routine-browser-card" key={routine.id}>
+                      <button className="routine-card-main" type="button" onClick={() => setRoutinePreviewId(routine.id)}>
+                        <strong>{routine.name}</strong>
+                        <small>{routine.purpose ?? routine.type}</small>
+                        <small>{routine.estimatedMinutes} min</small>
+                      </button>
+                      <span className="routine-card-actions">
+                        <button
+                          className="compact-start"
+                          type="button"
+                          onClick={() => {
+                            setRoutineBrowserOpen(false)
+                            startRoutine(routine.id)
+                          }}
+                        >
+                          Start
+                        </button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {routinePreview && (
+            <div className="routine-preview-content">
+              <p>{routinePreview.purpose ?? routinePreview.notes}</p>
+              <div className="routine-preview-meta">
+                <span>{routinePreview.estimatedMinutes} min</span>
+                <span>{normalizeRoutineRole(routinePreview)}</span>
+                {routineDefaultOverrideIds.has(routinePreview.id) && <span>custom defaults</span>}
+              </div>
+              {(['warmup', 'main', 'circuit', 'mobility', 'recovery'] as RoutineExercise['section'][]).map((section) => {
+                const sectionEntries = routinePreviewEntries.filter((entry) => entry.section === section)
+                if (!sectionEntries.length) {
+                  return null
+                }
+
+                return (
+                  <section className="routine-preview-section" key={section}>
+                    <p className="eyebrow">{section}</p>
+                    <div className="review-exercise-list">
+                      {sectionEntries.map((entry) => {
+                        const exercise = exerciseById.get(entry.exerciseId)
+                        return (
+                          <div className="review-row" key={entry.id}>
+                            <strong>{exercise?.name ?? entry.exerciseId}</strong>
+                            <span>{prescription(entry, exercise)}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                )
+              })}
+              <footer className="routine-preview-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => {
+                    setRoutineBrowserOpen(false)
+                    startRoutine(routinePreview.id)
+                  }}
+                >
+                  Start routine
+                </button>
+                <button className="ghost-button" type="button" onClick={() => openVariationPreview(routinePreview.id)}>
+                  Change it up
+                </button>
+                {routineDefaultOverrideIds.has(routinePreview.id) && (
+                  <button className="ghost-button" type="button" onClick={() => void handleRestoreRoutineOriginal(routinePreview.id)}>
+                    Restore original
+                  </button>
+                )}
+                <button className="ghost-button" type="button" onClick={() => setRoutinePreviewId('')}>
+                  Back
+                </button>
+              </footer>
+            </div>
+          )}
+        </section>
+      )}
+
+      {variationProposal && (
+        <section className="variation-preview-view" role="dialog" aria-modal="true" aria-labelledby="variation-preview-title">
+          <div className="variation-preview-panel">
+            <div>
+              <p className="eyebrow">Change it up</p>
+              <h2 id="variation-preview-title">
+                Changed {variationProposal.changedCount} of {variationProposal.totalSlots}
+              </h2>
+              <p>Accessory substitutions only. Anchors stay fixed and every replacement keeps its own Watch video.</p>
+            </div>
+            <div className="variation-replacement-list">
+              {variationProposal.replacements.map((replacement) => {
+                const original = exerciseById.get(replacement.originalExerciseId)
+                const selected = exerciseById.get(replacement.selectedExerciseId)
+                return (
+                  <div className="variation-replacement-row" key={replacement.slotId}>
+                    <span className="tag">{slotKindLabels[replacement.slotKind]}</span>
+                    <strong>{original?.name ?? replacement.originalExerciseId}</strong>
+                    <span>{selected?.name ?? replacement.selectedExerciseId}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <footer className="variation-actions">
+              <button className="primary-button" type="button" onClick={() => void handleApplyVariationToday()}>
+                Apply for today
+              </button>
+              <button className="ghost-button" type="button" onClick={() => void handleMakeVariationDefault()}>
+                Make these my routine defaults
+              </button>
+              <button className="ghost-button" type="button" onClick={handleTryDifferentVariation}>
+                Try different changes
+              </button>
+              <button className="ghost-button" type="button" onClick={() => setVariationProposal(null)}>
+                Keep routine unchanged
+              </button>
+            </footer>
+          </div>
+        </section>
+      )}
+
       {page === 'dashboard' && (
         <main className="page-grid today-cockpit">
           <Card className="hero-card cockpit-primary train-today-tile">
             <div>
               <p className="eyebrow">Train today</p>
-              <h2>{(scheduledToday ?? nextRecommendation?.routine)?.name ?? 'Choose a routine'}</h2>
+              <h2>{trainRoutine?.name ?? 'Choose a routine'}</h2>
               <p className="cockpit-subline">
-                {(scheduledToday ?? nextRecommendation?.routine)?.estimatedMinutes ?? settingsDraft.durationPreference} min
+                {trainRoutine?.estimatedMinutes ?? settingsDraft.durationPreference} min
                 {deloadApplied ? ' · deload volume' : ' · core, back, hips'}
               </p>
             </div>
-            {(scheduledToday ?? nextRecommendation?.routine) && (
-              <button className="primary-button" type="button" onClick={() => startRoutine((scheduledToday ?? nextRecommendation!.routine).id)}>
+            {trainRoutine && (
+              <button className="primary-button" type="button" onClick={() => startRoutine(trainRoutine.id)}>
                 <CheckCircle2 aria-hidden="true" size={18} />
                 Start
               </button>
@@ -2196,6 +2509,23 @@ function App() {
           <div>
             <p className="eyebrow">Skip workout</p>
             <h2 id="skip-prompt-title">{skipPromptRoutine.name}</h2>
+            <p>{skipAdvancesRotation ? 'Skip and move to the following routine.' : 'Keep this routine next after logging the skip.'}</p>
+          </div>
+          <div className="segmented">
+            <button
+              className={!skipAdvancesRotation ? 'active' : ''}
+              type="button"
+              onClick={() => setSkipAdvancesRotation(false)}
+            >
+              Keep this routine next
+            </button>
+            <button
+              className={skipAdvancesRotation ? 'active' : ''}
+              type="button"
+              onClick={() => setSkipAdvancesRotation(true)}
+            >
+              Skip and move on
+            </button>
           </div>
           <div className="skip-reason-grid">
             <button type="button" onClick={() => void handleSkipRoutine('work')}>Work</button>
@@ -2342,9 +2672,9 @@ function App() {
         <main className="page-grid train-page">
           <Card className="hero-card train-hero-card">
             <div>
-              <p className="eyebrow">Today recommended</p>
+              <p className="eyebrow">Today&apos;s next routine</p>
               <h2>{trainRoutine?.name ?? 'Choose workout'}</h2>
-              <p>{trainRoutine?.estimatedMinutes ?? settingsDraft.durationPreference} min</p>
+              <p>{trainRoutine?.estimatedMinutes ?? settingsDraft.durationPreference} min · {trainRoutine?.purpose ?? 'bike-tour strength and durability'}</p>
               <div className="train-preview-list">
                 {trainRoutineExercises.map((name) => (
                   <span key={name}>{name}</span>
@@ -2362,20 +2692,42 @@ function App() {
               className="ghost-button"
               type="button"
               onClick={() => {
-                setWorkoutsTab('routines')
-                setPage('workouts')
+                setRoutineBrowserOpen(true)
+                setRoutinePreviewId('')
               }}
             >
-              Choose workout
-            </button>
-            <button className="ghost-button" type="button" onClick={startFreeWorkout}>
-              Free log
+              Browse routines
             </button>
             {trainRoutine && (
-              <button className="ghost-button" type="button" onClick={() => setSkipPromptRoutine(trainRoutine)}>
-                Skip
+              <button className="ghost-button" type="button" onClick={() => openVariationPreview(trainRoutine.id)}>
+                Change it up
               </button>
             )}
+            <details className="more-actions">
+              <summary>More actions</summary>
+              <div>
+                <button className="ghost-button" type="button" onClick={startFreeWorkout}>
+                  Free log
+                </button>
+                {recoveryRoutines[0] && (
+                  <button className="ghost-button" type="button" onClick={() => startRoutine(recoveryRoutines[0].id)}>
+                    Recovery option
+                  </button>
+                )}
+                {trainRoutine && (
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => {
+                      setSkipPromptRoutine(trainRoutine)
+                      setSkipAdvancesRotation(false)
+                    }}
+                  >
+                    Skip
+                  </button>
+                )}
+              </div>
+            </details>
           </div>
         </main>
       )}
@@ -2568,6 +2920,13 @@ function App() {
                   <small>Equipment and app version</small>
                 </span>
               </button>
+              <button type="button" onClick={() => void handleShareApp()}>
+                <Compass aria-hidden="true" size={18} />
+                <span>
+                  <strong>Share RAMprep</strong>
+                  <small>Public app link only</small>
+                </span>
+              </button>
               <button type="button" onClick={() => setPage('settings')}>
                 <Download aria-hidden="true" size={18} />
                 <span>
@@ -2597,6 +2956,24 @@ function App() {
             </div>
             <p className="notice">Edit, reorder, duplicate, seed, and debug controls stay hidden until edit mode is on.</p>
           </Card>
+          <Card className="about-card">
+            <div className="about-brand">
+              <img src={`${import.meta.env.BASE_URL}ramprep-logo-horizontal.svg`} alt="RAMprep logo" />
+              <div>
+                <p className="eyebrow">About RAMprep</p>
+                <h2>RAMprep</h2>
+                <p>Ride Across America Preparation</p>
+              </div>
+            </div>
+            <p>Bike-tour strength, ride, load, recovery, and fueling preparation for riding across America.</p>
+            <div className="about-meta">
+              <span>{appVersion}</span>
+              <span>https://kevinhegg.github.io/ramprep/</span>
+            </div>
+            <button className="ghost-button" type="button" onClick={() => void handleShareApp()}>
+              Share RAMprep
+            </button>
+          </Card>
           {editMode && <MediaCoveragePanel onFlash={showFlash} />}
         </main>
       )}
@@ -2620,7 +2997,7 @@ function App() {
                     <div className="routine-header">
                       <div className="routine-title-block">
                         <span>{routine.name}</span>
-                        <small>{routine.type} · {routine.estimatedMinutes} min</small>
+                        <small>{routine.estimatedMinutes} min · {routine.purpose ?? routine.type}</small>
                       </div>
                       {editMode && (
                         <label className="switch">
@@ -2638,7 +3015,7 @@ function App() {
                     </div>
                     <div className="card-actions compact">
                       <button className="primary-button compact-cta" type="button" onClick={() => startRoutine(routine.id)}>
-                        Log
+                        Start
                       </button>
                       {editMode && (
                         <ActionMenu label={`${routine.name} actions`}>
@@ -3125,8 +3502,8 @@ function App() {
               <Route aria-hidden="true" size={20} />
             </div>
             <div className="segmented three-way">
-              <button className={logMode === 'recommended' ? 'active' : ''} type="button" onClick={() => nextRecommendation && startRoutine(nextRecommendation.routine.id)}>
-                Start recommended workout
+              <button className={logMode === 'recommended' ? 'active' : ''} type="button" onClick={() => trainRoutine && startRoutine(trainRoutine.id)}>
+                Start next routine
               </button>
               <button className={logMode === 'routine' ? 'active' : ''} type="button" onClick={() => setLogMode('routine')}>
                 Choose routine
@@ -4261,7 +4638,7 @@ function App() {
                       },
                     ],
                   }),
-                  'Conflict added. RampRep suggests a lighter week.',
+                  'Conflict added. RAMprep suggests a lighter week.',
                 )
                 setRoadmapConflictDraft({ startsOn: '', endsOn: '', note: '' })
               }}
@@ -4363,7 +4740,7 @@ function App() {
               </div>
               <RefreshCcw aria-hidden="true" size={20} />
             </div>
-            <p className="notice">RampRep uses a versioned, network-first app cache. Clearing it preserves IndexedDB workout logs, net-carb logs, settings, defaults, and roadmap data.</p>
+            <p className="notice">RAMprep uses a versioned, network-first app cache. Clearing it preserves IndexedDB workout logs, net-carb logs, settings, defaults, and roadmap data.</p>
             <button className="ghost-button" type="button" onClick={() => void handleClearLocalAppCache()}>
               Clear local app cache
             </button>

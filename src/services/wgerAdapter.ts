@@ -25,5 +25,5 @@ export const mapWgerExerciseToExercise = (item: WgerExerciseSummary): Omit<Exerc
 })
 
 export const fetchWgerExercises = async () => {
-  throw new Error('wger import is a future adapter. The first RampRep version runs fully offline.')
+  throw new Error('wger import is a future adapter. RAMprep currently runs fully offline.')
 }

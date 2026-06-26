@@ -1,5 +1,14 @@
-const CACHE_NAME = 'ramprep-sweat-mode-v1-2'
-const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './pwa-icon.svg', './favicon.svg', './ramrep-logo.svg', './apple-touch-icon.svg']
+const CACHE_NAME = 'ramprep-routine-branding-v1-4'
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './favicon.svg',
+  './ramprep-mark.svg',
+  './ramprep-logo-horizontal.svg',
+  './apple-touch-icon.png',
+  './ramprep-social-card.png',
+]
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)))

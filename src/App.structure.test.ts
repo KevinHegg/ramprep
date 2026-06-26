@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { primaryNavItems } from './data/navigation'
 import { seedExercises, seedRoutineExercises } from './data/seed'
@@ -49,12 +49,13 @@ describe('mobile UI structure', () => {
     expect(todayBlock).not.toContain('Pencil')
   })
 
-  it('makes Train a single-start screen before entering active workout mode', () => {
+  it('keeps Train focused on the next routine with direct browser and variation actions', () => {
     const trainBlock = sourceBetween("{page === 'train' && !activeWorkout", "{page === 'ride' && (")
 
-    expect(trainBlock).toContain('Today recommended')
+    expect(trainBlock).toContain("Today&apos;s next routine")
     expect(trainBlock.match(/Start/g)?.length).toBe(1)
-    expect(trainBlock).toContain('Choose workout')
+    expect(trainBlock).toContain('Browse routines')
+    expect(trainBlock).toContain('Change it up')
     expect(trainBlock).toContain('Free log')
   })
 
@@ -88,7 +89,7 @@ describe('mobile UI structure', () => {
     expect(appSource).toContain('{result.netCarbs} net carbs')
   })
 
-  it('uses the RampRep default library and keeps downward dog search-only', () => {
+  it('uses the RAMprep default library and keeps downward dog search-only', () => {
     expect(sweatModeLibraryGroups).toEqual([
       'Core Armor',
       'Back & Posture',
@@ -142,5 +143,19 @@ describe('mobile UI structure', () => {
   it('keeps the PWA deployable under /ramprep/ with an update prompt', () => {
     expect(viteConfigSource).toContain("base: '/ramprep/'")
     expect(appSource).toContain('Update available - refresh')
+  })
+
+  it('uses RAMprep public branding assets and metadata', () => {
+    const indexSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
+    const manifestSource = readFileSync(new URL('../public/manifest.webmanifest', import.meta.url), 'utf8')
+    const logoSource = readFileSync(new URL('../public/ramprep-logo-horizontal.svg', import.meta.url), 'utf8')
+
+    expect(indexSource).toContain('<title>RAMprep</title>')
+    expect(manifestSource).toContain('"short_name": "RAMprep"')
+    expect(logoSource).toContain('RAM')
+    expect(logoSource).toContain('prep')
+    expect(existsSync(new URL('../public/favicon.svg', import.meta.url))).toBe(true)
+    expect(existsSync(new URL('../public/apple-touch-icon.png', import.meta.url))).toBe(true)
+    expect(existsSync(new URL('../public/ramprep-social-card.png', import.meta.url))).toBe(true)
   })
 })
