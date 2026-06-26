@@ -1,8 +1,13 @@
+:root {
+  --ramprep-phone-width: 402px;
+}
+
 .app-shell {
   overflow-x: hidden;
-  width: 100%;
-  max-width: 100%;
+  width: min(100%, var(--ramprep-phone-width));
+  max-width: var(--ramprep-phone-width);
   min-height: 100svh;
+  margin: 0 auto;
   padding: 16px 14px calc(92px + env(safe-area-inset-bottom));
   color: var(--text);
   font-size: var(--font-body);
@@ -1272,6 +1277,32 @@ label > span,
   background: #000;
 }
 
+.demo-watch-panel h3 {
+  font-size: 19px;
+  line-height: 1.16;
+  overflow-wrap: anywhere;
+}
+
+.demo-provider-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.demo-source-footer {
+  display: grid;
+  gap: 3px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
 .verified-link-panel,
 .no-demo-panel {
   place-content: center;
@@ -1328,6 +1359,27 @@ label > span,
   gap: 6px;
   padding-top: 8px;
   border-top: 1px solid var(--border);
+}
+
+.quick-guide-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.quick-guide-card {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  color: var(--text-strong);
+  background: var(--surface-2);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.18;
+}
+
+.quick-guide-card.caution {
+  border-color: rgba(195, 87, 45, 0.35);
+  background: rgba(195, 87, 45, 0.1);
 }
 
 .demo-source-facts {
@@ -1890,6 +1942,10 @@ label > span,
   font-size: 24px;
 }
 
+.demo-watch-panel h3 {
+  font-size: 19px;
+}
+
 .demo-big-list {
   display: grid;
   gap: 10px;
@@ -2017,9 +2073,10 @@ label > span,
 .bottom-nav {
   position: fixed;
   z-index: 10;
-  right: 0;
   bottom: 0;
-  left: 0;
+  left: 50%;
+  width: min(100%, var(--ramprep-phone-width));
+  transform: translateX(-50%);
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 2px;
@@ -2206,4 +2263,143 @@ label > span,
     border-radius: 16px;
     padding: 8px;
   }
+}
+
+@media (min-width: 403px) {
+  .app-shell {
+    box-shadow:
+      0 0 0 1px var(--border),
+      0 18px 60px rgba(23, 36, 43, 0.12);
+  }
+}
+
+.topbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+}
+
+.brand-lockup {
+  align-items: flex-start;
+}
+
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  flex-basis: 42px;
+}
+
+.brand-mark svg {
+  width: 30px;
+  height: 30px;
+}
+
+.topbar h1 {
+  font-size: 34px;
+}
+
+.status-pill {
+  min-height: 38px;
+  padding: 0 8px;
+}
+
+.bottom-nav {
+  right: auto;
+  bottom: 0;
+  left: 50%;
+  width: min(100%, var(--ramprep-phone-width));
+  max-width: var(--ramprep-phone-width);
+  margin: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+}
+
+.bottom-nav button {
+  font-size: 9px;
+}
+
+.app-shell {
+  padding: 16px 14px calc(92px + env(safe-area-inset-bottom));
+}
+
+.page-grid,
+.routine-list,
+.library-grid,
+.form-grid,
+.two-column-section,
+.segmented.three-way,
+.thumb-grid,
+.day-grid,
+.train-secondary-actions,
+.ride-template-grid,
+.active-stepper-grid,
+.ride-field-grid,
+.active-workout-actions {
+  grid-template-columns: 1fr;
+}
+
+.meal-slot-grid,
+.mini-report-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hero-card {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.page-grid > .segmented,
+.hero-card,
+.routine-list,
+.library-grid,
+.exercise-stack,
+.carb-reports-card {
+  grid-column: auto;
+}
+
+.carb-integer-picker {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.carb-integer-picker strong {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+
+.carb-integer-picker button {
+  grid-row: 2;
+  min-width: 0;
+}
+
+.sheet-backdrop,
+.exercise-demo-view,
+.skip-prompt-mode,
+.active-workout-mode {
+  right: auto;
+  left: 50%;
+  width: min(100vw, var(--ramprep-phone-width));
+  max-width: var(--ramprep-phone-width);
+  transform: translateX(-50%);
+}
+
+.sheet-backdrop {
+  padding-right: 12px;
+  padding-left: 12px;
+}
+
+.number-picker-sheet,
+.filter-sheet {
+  width: 100%;
+}
+
+.toast,
+.update-banner {
+  right: auto;
+  left: 50%;
+  width: min(calc(100vw - 28px), calc(var(--ramprep-phone-width) - 28px));
+  max-width: calc(var(--ramprep-phone-width) - 28px);
+  transform: translateX(-50%);
 }

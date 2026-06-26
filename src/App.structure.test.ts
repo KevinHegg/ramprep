@@ -124,15 +124,18 @@ describe('mobile UI structure', () => {
   })
 
   it('keeps demo media honest when sources need review', () => {
-    expect(appSource).toContain('No external source yet')
+    expect(appSource).toContain('Video not yet approved')
     expect(appSource).toContain('Activity checklist')
     expect(appSource).toContain('demo-tab-row')
     expect(appSource).toContain('Watch')
-    expect(appSource).toContain('Read')
+    expect(appSource).toContain('Cues')
+    expect(appSource).toContain('Avoid')
     expect(appSource).toContain('Checklist')
     expect(appSource).toContain('Safety')
+    expect(appSource).toContain('Draft instructions are hidden')
     expect(appSource).toContain('MediaCoveragePanel')
     expect(appSource).toContain('editMode && <MediaCoveragePanel')
+    expect(appSource).not.toContain('Local coaching is still available')
     expect(appSource).not.toContain('Demo needed')
   })
 

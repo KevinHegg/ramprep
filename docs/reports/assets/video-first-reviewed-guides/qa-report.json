@@ -1,0 +1,132 @@
+{
+  "metrics": [
+    {
+      "label": "library-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "bodyScrollWidth": 390,
+      "overflowX": 0,
+      "shell": {
+        "width": 390,
+        "left": 0,
+        "right": 390
+      },
+      "nav": {
+        "width": 390,
+        "left": 0,
+        "right": 390
+      },
+      "demo": null,
+      "headerText": "Ride Across America Preparation",
+      "title": "Workouts"
+    },
+    {
+      "label": "bench-watch-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "bodyScrollWidth": 390,
+      "overflowX": 0,
+      "shell": {
+        "width": 390,
+        "left": 0,
+        "right": 390
+      },
+      "nav": {
+        "width": 390,
+        "left": 0,
+        "right": 390
+      },
+      "demo": {
+        "width": 390,
+        "left": 0,
+        "right": 390
+      },
+      "headerText": "Ride Across America Preparation",
+      "title": "Workouts"
+    },
+    {
+      "label": "floor-watch-390",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "bodyScrollWidth": 390,
+      "overflowX": 0,
+      "shell": {
+        "width": 390,
+        "left": 0,
+        "right": 390
+      },
+      "nav": {
+        "width": 390,
+        "left": 0,
+        "right": 390
+      },
+      "demo": {
+        "width": 390,
+        "left": 0,
+        "right": 390
+      },
+      "headerText": "Ride Across America Preparation",
+      "title": "Workouts"
+    },
+    {
+      "label": "library-430",
+      "viewport": {
+        "width": 430,
+        "height": 932
+      },
+      "bodyScrollWidth": 430,
+      "overflowX": 0,
+      "shell": {
+        "width": 402,
+        "left": 14,
+        "right": 416
+      },
+      "nav": {
+        "width": 402,
+        "left": 14,
+        "right": 416
+      },
+      "demo": null,
+      "headerText": "Ride Across America Preparation",
+      "title": "Workouts"
+    },
+    {
+      "label": "today-wide-phone-frame",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "bodyScrollWidth": 1440,
+      "overflowX": 0,
+      "shell": {
+        "width": 402,
+        "left": 519,
+        "right": 921
+      },
+      "nav": {
+        "width": 402,
+        "left": 519,
+        "right": 921
+      },
+      "demo": null,
+      "headerText": "Ride Across America Preparation",
+      "title": "Today"
+    }
+  ],
+  "benchInfo": {
+    "iframeSrc": "https://www.youtube.com/embed/Ns8pTamaGGg?controls=1&playsinline=1&rel=0",
+    "openHref": "https://www.youtube.com/watch?v=Ns8pTamaGGg",
+    "hasForbidden": false
+  },
+  "floorInfo": {
+    "iframeSrc": "https://www.youtube.com/embed/PhTDzR0TpZs?controls=1&playsinline=1&rel=0",
+    "openHref": "https://www.youtube.com/watch?v=PhTDzR0TpZs",
+    "hasBenchSetup": false
+  }
+}

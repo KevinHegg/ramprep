@@ -67,6 +67,42 @@ const quickExerciseGuidance = (
     }
   }
 
+  if (id === 'floor-glute-bridge') {
+    return {
+      instructions: [
+        'Lie on your back with knees bent and feet flat near your hips.',
+        'Brace gently, press through your feet, and lift your hips.',
+        'Finish with shoulders, hips, and knees aligned; lower slowly.',
+      ],
+      formCues: ['Back on floor', 'Feet flat near hips', 'Lift hips smoothly', 'Ribs stay quiet'],
+      commonMistakes: ['Pushing through the neck', 'Flaring ribs', 'Arching the low back', 'Letting knees cave in'],
+    }
+  }
+
+  if (id === 'bench-hip-thrust') {
+    return {
+      instructions: [
+        'Rest your upper back on the bench edge and plant both feet flat.',
+        'Brace ribs down, tuck chin slightly, and drive hips upward through your feet.',
+        'Stop when shoulders, hips, and knees form a straight line; squeeze glutes.',
+      ],
+      formCues: ['Upper back on bench', 'Feet flat on floor', 'Chin slightly tucked', 'Glutes finish the lift'],
+      commonMistakes: ['Arching the lower back', 'Bench pressing into the neck', 'Knees collapsing inward', 'Feet sliding away'],
+    }
+  }
+
+  if (id === 'feet-elevated-glute-bridge') {
+    return {
+      instructions: [
+        'Lie on your back with heels on a bench and shoulders on the floor.',
+        'Brace gently and press heels into the bench to lift hips.',
+        'Pause when hips are extended, then lower with control.',
+      ],
+      formCues: ['Shoulders stay on floor', 'Heels on bench', 'Hips lift, ribs quiet', 'Slow lower'],
+      commonMistakes: ['Using the neck', 'Letting feet slide', 'Overarching the back', 'Rushing the pause'],
+    }
+  }
+
   if (id.includes('trailer') || id.includes('burley') || bikeTourPurpose.includes('trailer handling')) {
     return {
       instructions: [
@@ -530,6 +566,22 @@ const exerciseSeeds: ExerciseSeed[] = [
     defaults: { sets: 2, durationSeconds: 30 },
   },
   {
+    id: 'floor-glute-bridge',
+    name: 'floor glute bridge',
+    description: 'A floor-based hip extension drill for glute strength and low-back support.',
+    instructions: [
+      'Lie on your back with knees bent and feet flat near your hips.',
+      'Brace gently, press through your feet, and lift your hips.',
+      'Finish with shoulders, hips, and knees aligned; lower slowly.',
+    ],
+    formCues: ['Back on floor', 'Feet flat near hips', 'Lift hips smoothly', 'Ribs stay quiet'],
+    commonMistakes: ['Pushing through the neck', 'Flaring ribs', 'Arching the low back', 'Letting knees cave in'],
+    targetAreas: ['glutes', 'hamstrings', 'core'],
+    equipment: ['bodyweight', 'yoga mat'],
+    difficulty: 'beginner',
+    defaults: { sets: 2, reps: '8-10' },
+  },
+  {
     id: 'glute-bridge',
     name: 'glute bridge',
     description: 'Hip extension activation for glutes and low-back support.',
@@ -599,7 +651,7 @@ const exerciseSeeds: ExerciseSeed[] = [
   },
   {
     id: 'low-lunge-hip-flexor-stretch',
-    name: 'low lunge hip-flexor stretch',
+    name: 'hip-flexor stretch',
     description: 'Hip-flexor mobility to balance long periods in a cycling position.',
     instructions: [
       'Step into a half-kneeling lunge on a mat.',
@@ -812,7 +864,7 @@ const extraExerciseSeeds: ExerciseSeed[] = [
   quickExercise('low-cadence-climb-intervals', 'low-cadence climb intervals', 'Ride Sessions', ['bike'], ['glutes', 'quads', 'core'], { durationSeconds: 2400, effort: 7 }, ['hill climbing'], 'Low-cadence hill strength intervals without sprinting.'),
   quickExercise('loaded-gravel-ride', 'loaded gravel ride', 'Ride Sessions', ['bike'], ['aerobic base', 'trunk'], { durationSeconds: 5400, distance: '20 mi', effort: 6 }, ['loaded-bike durability'], 'Practice handling and pacing with bags or load.'),
   quickExercise('recovery-spin', 'recovery spin', 'Recovery', ['bike'], ['recovery'], { durationSeconds: 1800, effort: 2 }, ['recovery'], 'Easy spin to move blood without adding fatigue.'),
-  quickExercise('walk-hike', 'walk/hike', 'Walk & Ruck', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 2700, effort: 3 }, ['walking base'], 'Low-stress outdoor conditioning for busy weeks.'),
+  quickExercise('walk-hike', 'walk hike', 'Walk & Ruck', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 2700, effort: 3 }, ['walking base'], 'Low-stress outdoor conditioning for busy weeks.'),
   quickExercise('commute-walk', 'commute walk', 'Walk & Ruck', ['bodyweight'], ['aerobic base'], { durationSeconds: 1500, distance: '1.2 mi', effort: 2 }, ['walking base'], 'Default 1.2 mile commute walk for easy consistency.'),
   quickExercise('dog-walk', 'dog walk', 'Walk & Ruck', ['bodyweight'], ['aerobic base', 'hips'], { durationSeconds: 3000, distance: '2.5 mi', effort: 2 }, ['walking base', 'recovery'], 'Default 2.5 mile dog walk that supports base without hard training stress.'),
   quickExercise('dog-walk-light-ruck', 'dog walk with light ruck', 'Walk & Ruck', ['bodyweight', 'rucksack'], ['aerobic base', 'posture'], { durationSeconds: 3000, distance: '2.5 mi', effort: 3 }, ['walking base', 'ruck tolerance'], 'Dog walk with a deliberately light hydration ruck. Dog comfort and posture stay first.'),
@@ -827,14 +879,24 @@ const extraExerciseSeeds: ExerciseSeed[] = [
   quickExercise('controlled-trailer-towing-workout', 'controlled trailer towing workout', 'Burley & Trailer Work', ['bike', 'trailer'], ['handling', 'aerobic base', 'trunk'], { durationSeconds: 2400, distance: '5 mi', effort: 4 }, ['trailer handling', 'loaded-bike durability'], 'Short controlled towing session with stops, turns, braking practice, and comfort checks.'),
   quickExercise('easy-tour-specificity-session', 'easy tour specificity session', 'Ride Sessions', ['bike'], ['aerobic base', 'pacing'], { durationSeconds: 3600, distance: '12 mi', effort: 4 }, ['ride conditioning', 'loaded-bike durability'], 'Easy touring-specific session for pacing, gear checks, nutrition notes, and steady effort.'),
   quickExercise('dumbbell-bench-press', 'dumbbell bench press', 'Upper Back & Posture', ['dumbbell', 'bench'], ['chest', 'triceps', 'shoulders'], { sets: 3, reps: '8-12' }, ['bench strength'], 'Flat-bench dumbbell press option when the portable bench is available.'),
-  quickExercise('bench-supported-one-arm-row', 'bench-supported one-arm row', 'Upper Back & Posture', ['dumbbell', 'bench'], ['lats', 'mid back', 'core'], { sets: 3, reps: '10 each side' }, ['upper back', 'bench strength'], 'More supported one-arm row variation for less low-back fatigue.'),
-  quickExercise('bench-hip-thrust', 'bench hip thrust/glute bridge', 'Hinge & Posterior Chain', ['bodyweight', 'bench'], ['glutes', 'hamstrings'], { sets: 3, reps: '10' }, ['posterior chain', 'bench strength'], 'Bench-supported glute bridge or hip thrust for stronger hip extension.'),
+  quickExercise('bench-supported-one-arm-row', 'bench-supported one-arm dumbbell row', 'Upper Back & Posture', ['dumbbell', 'bench'], ['lats', 'mid back', 'core'], { sets: 3, reps: '10 each side' }, ['upper back', 'bench strength'], 'Supported one-arm dumbbell row variation for less low-back fatigue.'),
+  quickExercise('bench-hip-thrust', 'bench hip thrust', 'Hinge & Posterior Chain', ['bodyweight', 'bench'], ['glutes', 'hamstrings'], { sets: 2, reps: '8-10', effort: 6 }, ['posterior chain', 'bench strength'], 'Upper-back-supported hip thrust for stronger hip extension.'),
+  quickExercise('feet-elevated-glute-bridge', 'feet-elevated glute bridge', 'Hinge & Posterior Chain', ['bodyweight', 'bench'], ['glutes', 'hamstrings'], { sets: 2, reps: '8-10' }, ['posterior chain', 'bench strength'], 'Search-only bridge variation with shoulders on the floor and feet elevated.'),
   quickExercise('bench-supported-rear-delt-raise', 'bench-supported rear delt raise', 'Upper Back & Posture', ['dumbbell', 'bench'], ['rear delts', 'upper back'], { sets: 2, reps: '12' }, ['upper back', 'bench strength'], 'Bench-supported rear-delt work that keeps the trunk quiet.'),
   quickExercise('rear-foot-elevated-split-squat', 'rear-foot elevated split squat', 'Single-Leg Strength', ['bodyweight', 'dumbbell', 'bench'], ['glutes', 'quads'], { sets: 2, reps: '6 each leg' }, ['hill climbing', 'bench strength'], 'Optional advanced split squat using the bench as rear-foot support.'),
   quickExercise('step-up-to-bench', 'step-up to bench', 'Single-Leg Strength', ['bodyweight', 'dumbbell', 'bench'], ['glutes', 'quads', 'calves'], { sets: 2, reps: '6 each leg' }, ['hill climbing', 'bench strength'], 'Only use when the bench is specifically rated and marked safe for step-ups.'),
 ]
 
 export const seedExercises = [...exerciseSeeds, ...extraExerciseSeeds].map(makeExercise)
+
+export const retiredExerciseRecords = [
+  {
+    id: 'bench-hip-thrust',
+    retiredName: 'bench hip thrust/glute bridge',
+    replacementExerciseIds: ['bench-hip-thrust', 'floor-glute-bridge', 'feet-elevated-glute-bridge'],
+    reason: 'Combined record split so each physical setup has its own video and guide.',
+  },
+] as const
 
 export const seedExerciseMedia: ExerciseMedia[] = []
 
@@ -853,7 +915,7 @@ const routineBase = (id: string, name: string, type: Routine['type'], order: num
 export const seedRoutines: Routine[] = [
   routineBase('routine-a-back-hinge-core', 'Back + Hinge + Core', 'strength', 1, 45),
   routineBase('routine-b-legs-cycling-support', 'Legs + Cycling Support', 'strength', 2, 45),
-  routineBase('routine-c-conditioning-circuit', 'Conditioning Circuit', 'conditioning', 3, 30, '4-6 controlled rounds with 60-90 seconds rest. Choose swing only when hinge form is crisp.'),
+  routineBase('routine-c-conditioning-circuit', 'Conditioning Circuit', 'conditioning', 3, 30, '4-6 controlled rounds with 60-90 seconds rest. Keep every movement crisp before adding load.'),
   routineBase('routine-d-10-minute-mat-mobility', '10-Minute Mat Mobility', 'mobility', 4, 10),
   routineBase('routine-e-recovery-core-back', 'Recovery Core and Back', 'recovery', 5, 20),
   routineBase('routine-f-burley-loaded-trailer-ride', 'Burley Loaded Trailer Ride', 'bike', 6, 60, 'Conditioning ride with dog comfort as mandatory. Start with empty trailer practice before dog-loaded rides. Avoid heat, traffic, excessive speed, and hard hill repeats with the dog.'),
@@ -877,45 +939,40 @@ const routineExercise = (
 })
 
 export const seedRoutineExercises: RoutineExercise[] = [
-  routineExercise('routine-a-back-hinge-core', 'cat-cow', 'warmup', 1, { durationSeconds: 60 }),
-  routineExercise('routine-a-back-hinge-core', 'hip circles', 'warmup', 2, { durationSeconds: 60 }),
-  routineExercise('routine-a-back-hinge-core', 'glute bridge', 'warmup', 3, { sets: 2, reps: '10' }),
-  routineExercise('routine-a-back-hinge-core', 'bodyweight squat', 'warmup', 4, { sets: 2, reps: '8' }),
-  routineExercise('routine-a-back-hinge-core', 'kettlebell deadlift', 'main', 5, { sets: 3, reps: '8' }),
-  routineExercise('routine-a-back-hinge-core', 'goblet squat', 'main', 6, { sets: 3, reps: '8' }),
-  routineExercise('routine-a-back-hinge-core', 'one-arm dumbbell row', 'main', 7, { sets: 3, reps: '10 each side', side: 'each', variationKey: 'row-option', variationOptions: ['one-arm dumbbell row', 'bench-supported one-arm row'] }),
-  routineExercise('routine-a-back-hinge-core', 'suitcase carry', 'main', 8, { sets: 4, durationSeconds: 45, side: 'each', notes: 'Build toward 60 seconds each side.' }),
-  routineExercise('routine-a-back-hinge-core', 'dead bug', 'main', 9, { sets: 2, reps: '8 each side', side: 'each' }),
-  routineExercise('routine-a-back-hinge-core', 'side plank', 'main', 10, { sets: 2, durationSeconds: 30, side: 'each', notes: 'Add a third set when 40 seconds is clean.' }),
+  routineExercise('routine-a-back-hinge-core', '90/90 hip switch', 'warmup', 1, { sets: 1, reps: '6 each side', side: 'each' }),
+  routineExercise('routine-a-back-hinge-core', 'floor glute bridge', 'warmup', 2, { sets: 2, reps: '8-10' }),
+  routineExercise('routine-a-back-hinge-core', 'kettlebell deadlift', 'main', 3, { sets: 3, reps: '8' }),
+  routineExercise('routine-a-back-hinge-core', 'goblet squat', 'main', 4, { sets: 3, reps: '8' }),
+  routineExercise('routine-a-back-hinge-core', 'bench-supported one-arm dumbbell row', 'main', 5, { sets: 3, reps: '10 each side', side: 'each' }),
+  routineExercise('routine-a-back-hinge-core', 'suitcase carry', 'main', 6, { sets: 4, durationSeconds: 45, side: 'each', notes: 'Build toward 60 seconds each side.' }),
+  routineExercise('routine-a-back-hinge-core', 'dead bug', 'main', 7, { sets: 2, reps: '8 each side', side: 'each' }),
+  routineExercise('routine-a-back-hinge-core', 'side plank', 'main', 8, { sets: 2, durationSeconds: 30, side: 'each', notes: 'Add a third set when 40 seconds is clean.' }),
 
   routineExercise('routine-b-legs-cycling-support', 'step-up', 'main', 1, { sets: 3, reps: '8 each leg', side: 'each' }),
   routineExercise('routine-b-legs-cycling-support', 'dumbbell Romanian deadlift', 'main', 2, { sets: 3, reps: '8' }),
   routineExercise('routine-b-legs-cycling-support', 'split squat', 'main', 3, { sets: 3, reps: '8 each leg', side: 'each', notes: 'Use 2 sets on lower-energy days.' }),
-  routineExercise('routine-b-legs-cycling-support', 'dumbbell floor press', 'main', 4, { sets: 3, reps: '8-12', variationKey: 'press-option', variationOptions: ['dumbbell floor press', 'push-up', 'dumbbell bench press'] }),
+  routineExercise('routine-b-legs-cycling-support', 'dumbbell bench press', 'main', 4, { sets: 3, reps: '8-12' }),
   routineExercise('routine-b-legs-cycling-support', 'band pull-apart', 'main', 5, { sets: 3, reps: '15' }),
   routineExercise('routine-b-legs-cycling-support', 'bird dog', 'main', 6, { sets: 2, reps: '8 each side', side: 'each' }),
-  routineExercise('routine-b-legs-cycling-support', 'glute bridge march', 'main', 7, { sets: 2, reps: '10 each side', side: 'each', variationKey: 'glute-option', variationOptions: ['glute bridge march', 'bench hip thrust/glute bridge'] }),
+  routineExercise('routine-b-legs-cycling-support', 'bench hip thrust', 'main', 7, { sets: 2, reps: '8-10', notes: 'Start bodyweight with controlled tempo around effort 5-6/10.' }),
+  routineExercise('routine-b-legs-cycling-support', 'calf raise', 'main', 8, { sets: 3, reps: '12' }),
 
-  routineExercise('routine-c-conditioning-circuit', 'kettlebell swing', 'circuit', 1, { reps: '10', variationKey: 'hinge-option', variationOptions: ['kettlebell swing', 'kettlebell deadlift'], notes: 'Use deadlift if swings are not feeling crisp.' }),
-  routineExercise('routine-c-conditioning-circuit', 'push-up', 'circuit', 2, { reps: '8-12' }),
-  routineExercise('routine-c-conditioning-circuit', 'goblet squat', 'circuit', 3, { reps: '8' }),
-  routineExercise('routine-c-conditioning-circuit', 'one-arm dumbbell row', 'circuit', 4, { reps: '8 each side', side: 'each' }),
+  routineExercise('routine-c-conditioning-circuit', 'kettlebell deadlift', 'circuit', 1, { reps: '8' }),
+  routineExercise('routine-c-conditioning-circuit', 'goblet squat', 'circuit', 2, { reps: '8' }),
+  routineExercise('routine-c-conditioning-circuit', 'bench-supported one-arm dumbbell row', 'circuit', 3, { reps: '8 each side', side: 'each' }),
+  routineExercise('routine-c-conditioning-circuit', 'Pallof press', 'circuit', 4, { reps: '10 each side', side: 'each' }),
   routineExercise('routine-c-conditioning-circuit', 'farmer carry', 'circuit', 5, { durationSeconds: 45 }),
 
-  routineExercise('routine-d-10-minute-mat-mobility', 'cat-cow', 'mobility', 1, { durationSeconds: 60 }),
-  routineExercise('routine-d-10-minute-mat-mobility', "child's pose with side reach", 'mobility', 2, { durationSeconds: 120, side: 'each' }),
-  routineExercise('routine-d-10-minute-mat-mobility', 'low lunge hip-flexor stretch', 'mobility', 3, { durationSeconds: 120, side: 'each' }),
-  routineExercise('routine-d-10-minute-mat-mobility', 'figure-four stretch', 'mobility', 4, { durationSeconds: 120, side: 'each' }),
-  routineExercise('routine-d-10-minute-mat-mobility', 'hamstring stretch', 'mobility', 5, { durationSeconds: 120, side: 'each' }),
-  routineExercise('routine-d-10-minute-mat-mobility', 'thoracic open book', 'mobility', 6, { reps: '8 each side', side: 'each' }),
-  routineExercise('routine-d-10-minute-mat-mobility', 'sphinx pose', 'mobility', 7, { durationSeconds: 60, variationKey: 'extension-option', variationOptions: ['sphinx pose', 'cobra pose'] }),
+  routineExercise('routine-d-10-minute-mat-mobility', '90/90 hip switch', 'mobility', 1, { sets: 1, reps: '6 each side', side: 'each' }),
+  routineExercise('routine-d-10-minute-mat-mobility', 'thoracic open book', 'mobility', 2, { reps: '8 each side', side: 'each' }),
+  routineExercise('routine-d-10-minute-mat-mobility', 'ankle dorsiflexion rocks', 'mobility', 3, { sets: 2, reps: '8 each side', side: 'each' }),
+  routineExercise('routine-d-10-minute-mat-mobility', 'hip-flexor stretch', 'mobility', 4, { durationSeconds: 120, side: 'each' }),
 
   routineExercise('routine-e-recovery-core-back', 'bird dog', 'recovery', 1, { sets: 2, reps: '8 each side', side: 'each' }),
   routineExercise('routine-e-recovery-core-back', 'dead bug', 'recovery', 2, { sets: 2, reps: '8 each side', side: 'each' }),
   routineExercise('routine-e-recovery-core-back', 'side plank', 'recovery', 3, { sets: 2, durationSeconds: 25, side: 'each' }),
-  routineExercise('routine-e-recovery-core-back', 'glute bridge', 'recovery', 4, { sets: 2, reps: '12' }),
+  routineExercise('routine-e-recovery-core-back', 'floor glute bridge', 'recovery', 4, { sets: 2, reps: '8-10' }),
   routineExercise('routine-e-recovery-core-back', 'thoracic open book', 'recovery', 5, { reps: '8 each side', side: 'each' }),
-  routineExercise('routine-e-recovery-core-back', "child's pose with side reach", 'recovery', 6, { durationSeconds: 60 }),
 
   routineExercise('routine-f-burley-loaded-trailer-ride', 'Burley loaded trailer ride', 'precheck', 1, { notes: 'Pre-check tires, hitch, leash/harness, water, route, weather, and dog comfort.' }),
   routineExercise('routine-f-burley-loaded-trailer-ride', 'easy endurance ride', 'warmup', 2, { durationSeconds: 600, notes: '10 min easy warmup before adding any climbing.' }),
@@ -982,7 +1039,7 @@ export const seedRoadmap: TourRoadmap = {
   ],
   milestones: [
     { id: 'mile-foundation-1', phaseId: 'phase-foundation', title: 'Complete 3 consistent weeks', description: 'Hit the planned weekly frequency without forcing missed days.', targetMonth: 1, order: 1, completed: false },
-    { id: 'mile-foundation-2', phaseId: 'phase-foundation', title: 'Own the core baseline', description: 'Dead bug, bird dog, side plank, and glute bridge feel crisp.', targetMonth: 2, order: 2, completed: false },
+    { id: 'mile-foundation-2', phaseId: 'phase-foundation', title: 'Own the core baseline', description: 'Dead bug, bird dog, side plank, and floor glute bridge feel crisp.', targetMonth: 2, order: 2, completed: false },
     { id: 'mile-foundation-3', phaseId: 'phase-foundation', title: 'Mobility habit is automatic', description: 'Use 10-minute mat mobility at least twice per week.', targetMonth: 3, order: 3, completed: false },
     { id: 'mile-hills-1', phaseId: 'phase-hill-strength', title: 'Hill strength week', description: 'Add step-ups, split squats, and low-cadence climbing in the same week.', targetMonth: 4, order: 4, completed: false },
     { id: 'mile-hills-2', phaseId: 'phase-hill-strength', title: 'Longer weekend ride', description: 'Build a sustainable weekend ride without back or hip flare-ups.', targetMonth: 6, order: 5, completed: false },

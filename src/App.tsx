@@ -80,12 +80,14 @@ import {
 } from './data/exerciseDemoCatalog'
 import {
   activitySessionMediaCoverageRows,
+  defaultMovementVideoCoveragePercent,
   mediaCoverageRows,
   mediaCoverageSummary,
   movementMediaCoverageRows,
   optionalSearchOnlyMediaCoverageRows,
   type MediaCoverageRow,
 } from './data/mediaCoverageMatrix'
+import { getApprovedExerciseQuickGuide } from './data/exerciseQuickGuides'
 import { primaryNavItems } from './data/navigation'
 import {
   isDefaultLibraryExercise,
@@ -661,8 +663,8 @@ const ExerciseDemoButton = ({
   const Icon = label === 'Checklist' ? CheckCircle2 : CircleHelp
 
   if (!verifiedMedia) {
-    if (allowLocalFallback) {
-      const fallbackLabel = activitySession ? 'Log activity' : label
+    if (allowLocalFallback && activitySession) {
+      const fallbackLabel = 'Log activity'
       return (
         <button
           className={compact ? 'demo-button compact' : 'demo-button'}
@@ -678,7 +680,7 @@ const ExerciseDemoButton = ({
     return (
       <span className={compact ? 'demo-status-text compact' : 'demo-status-text'} aria-label={`${exercise.name} needs source review`}>
         <CircleHelp aria-hidden="true" size={iconSize} />
-        <span>Needs review</span>
+        <span>{activitySession ? 'Checklist not ready' : 'Video not yet approved'}</span>
       </span>
     )
   }
@@ -723,7 +725,7 @@ const exerciseDemoStatusText = (exercise: Exercise) => {
   if (action === 'How') {
     return 'How-to ready'
   }
-  return 'Needs review'
+  return 'Video not yet approved'
 }
 
 const ExerciseDemoView = ({
@@ -741,9 +743,9 @@ const ExerciseDemoView = ({
   const activitySession = isActivitySessionExercise(exercise)
   const hasVideo = !activitySession && isVerifiedVideoDemoMedia(verifiedMedia)
   const hasChecklist = activitySession && isChecklistDemoMedia(verifiedMedia)
-  const hasSourceTab = Boolean(verifiedMedia && !activitySession)
+  const approvedGuide = !activitySession ? getApprovedExerciseQuickGuide(exercise.id) : undefined
   const sourceHref = verifiedMedia?.sourcePageUrl ?? verifiedMedia?.url
-  const [demoTab, setDemoTab] = useState<'watch' | 'do' | 'mistakes' | 'source'>(hasVideo ? 'watch' : 'do')
+  const [demoTab, setDemoTab] = useState<'watch' | 'cues' | 'avoid' | 'checklist' | 'safety'>(activitySession ? 'checklist' : 'watch')
   const demoSteps = exercise.instructions.slice(0, 5).map(landmarkStep)
   const demoMistakes = exercise.commonMistakes.slice(0, 5)
   const sourceActionLabel = verifiedMedia?.kind === 'youtubeEmbed' ? 'Open in YouTube' : verifiedMedia?.kind === 'externalVideo' ? 'Open video' : 'Open source'
@@ -766,48 +768,71 @@ const ExerciseDemoView = ({
         {!verifiedMedia && (
           <div className="demo-review-notice">
             <CircleHelp aria-hidden="true" size={18} />
-            <span>{activitySession ? 'Activity checklist needs review. Log fields are still available.' : 'No external source yet. Local coaching is still available below.'}</span>
+            <span>{activitySession ? 'Activity checklist needs review. Log fields are still available.' : 'Video not yet approved. Draft instructions are hidden until review is complete.'}</span>
           </div>
         )}
 
         <div className="demo-tab-row" role="tablist" aria-label={activitySession ? 'Activity checklist details' : 'Exercise demo details'}>
-          {hasVideo && (
+          {!activitySession && (
             <button className={demoTab === 'watch' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'watch'} onClick={() => setDemoTab('watch')}>
               Watch
             </button>
           )}
-          <button className={demoTab === 'do' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'do'} onClick={() => setDemoTab('do')}>
-            {activitySession ? 'Checklist' : 'Do'}
-          </button>
-          <button className={demoTab === 'mistakes' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'mistakes'} onClick={() => setDemoTab('mistakes')}>
-            {activitySession ? 'Safety' : 'Mistakes'}
-          </button>
-          {hasSourceTab && (
-            <button className={demoTab === 'source' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'source'} onClick={() => setDemoTab('source')}>
-              Source
+          {!activitySession && approvedGuide && (
+            <button className={demoTab === 'cues' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'cues'} onClick={() => setDemoTab('cues')}>
+              Cues
+            </button>
+          )}
+          {!activitySession && approvedGuide && (
+            <button className={demoTab === 'avoid' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'avoid'} onClick={() => setDemoTab('avoid')}>
+              Avoid
+            </button>
+          )}
+          {activitySession && (
+            <button className={demoTab === 'checklist' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'checklist'} onClick={() => setDemoTab('checklist')}>
+              Checklist
+            </button>
+          )}
+          {activitySession && (
+            <button className={demoTab === 'safety' ? 'active' : ''} type="button" role="tab" aria-selected={demoTab === 'safety'} onClick={() => setDemoTab('safety')}>
+              Safety
             </button>
           )}
         </div>
 
-        {demoTab === 'watch' && hasVideo && (
+        {demoTab === 'watch' && !activitySession && (
           <div className="demo-section demo-glance-panel demo-watch-panel">
             <p className="eyebrow">Watch</p>
-            <h3>{verifiedMedia?.title ?? 'Source needs review'}</h3>
-            {verifiedMedia?.kind === 'youtubeEmbed' && verifiedMedia.embedUrl ? (
-              <iframe
-                title={verifiedMedia.title}
-                src={verifiedMedia.embedUrl}
-                allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
+            {hasVideo ? (
+              <>
+                <h3>{verifiedMedia?.title ?? 'Source needs review'}</h3>
+                <p className="demo-provider-line">{verifiedMedia?.channelName ?? verifiedMedia?.provider} · {verifiedMedia?.provider}</p>
+                {verifiedMedia?.kind === 'youtubeEmbed' && verifiedMedia.embedUrl ? (
+                  <iframe
+                    title={verifiedMedia.title}
+                    src={verifiedMedia.embedUrl}
+                    allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                  />
+                ) : (
+                  <p>{verifiedMedia?.attributionText}</p>
+                )}
+                <div className="demo-source-footer">
+                  <span>{verifiedMedia?.attributionText}</span>
+                  {verifiedMedia?.reviewedAtISO && <span>Checked {verifiedMedia.reviewedAtISO.slice(0, 10)}</span>}
+                </div>
+                {sourceHref && (
+                  <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
+                    <ExternalLink aria-hidden="true" size={18} />
+                    {sourceActionLabel}
+                  </a>
+                )}
+              </>
             ) : (
-              <p>{verifiedMedia?.attributionText}</p>
-            )}
-            {sourceHref && (
-              <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
-                <ExternalLink aria-hidden="true" size={18} />
-                {sourceActionLabel}
-              </a>
+              <div className="demo-review-notice">
+                <CircleHelp aria-hidden="true" size={18} />
+                <span>Video not yet approved. This movement stays out of default recommendations until a specific video is verified.</span>
+              </div>
             )}
             <div className="demo-meta">
               <span className="tag">{rampRepGroupForExercise(exercise)}</span>
@@ -816,9 +841,35 @@ const ExerciseDemoView = ({
           </div>
         )}
 
-        {demoTab === 'do' && (
+        {demoTab === 'cues' && approvedGuide && (
           <div className="demo-section demo-glance-panel">
-            <p className="eyebrow">{activitySession ? 'Checklist' : 'Do'}</p>
+            <p className="eyebrow">Cues</p>
+            <div className="quick-guide-grid">
+              {approvedGuide.cues.slice(0, 3).map((cue, cueIndex) => (
+                <article className="quick-guide-card" key={`${exercise.id}-cue-${cueIndex}`}>
+                  {cue}
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {demoTab === 'avoid' && approvedGuide && (
+          <div className="demo-section demo-glance-panel">
+            <p className="eyebrow">Avoid</p>
+            <div className="quick-guide-grid">
+              {approvedGuide.mistakes.slice(0, 3).map((mistake, mistakeIndex) => (
+                <article className="quick-guide-card caution" key={`${exercise.id}-mistake-${mistakeIndex}`}>
+                  {mistake}
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {demoTab === 'checklist' && activitySession && (
+          <div className="demo-section demo-glance-panel">
+            <p className="eyebrow">Checklist</p>
             <p className="demo-purpose">{exercise.purpose ?? exercise.description}</p>
             <h3>Setup</h3>
             <p>{exercise.setup ?? 'Choose a stable start and a range you can control.'}</p>
@@ -829,7 +880,6 @@ const ExerciseDemoView = ({
             </ol>
             <p className="demo-dose">{exercise.dose ?? prescription({ id: 'demo', routineId: 'demo', exerciseId: exercise.id, section: 'main', order: 1 }, exercise)}</p>
             {hasChecklist && <p className="demo-checklist-note">Use this before the session, then log duration, distance, load, effort, and notes from the Ride screen.</p>}
-            {!verifiedMedia && !activitySession && <p className="demo-checklist-note">No external source yet. This local how-to stays out of default media coverage until a direct source is reviewed.</p>}
             {exercise.safety?.length ? (
               <div className="demo-stop-list">
                 <h3>Stop if</h3>
@@ -843,9 +893,9 @@ const ExerciseDemoView = ({
           </div>
         )}
 
-        {demoTab === 'mistakes' && (
+        {demoTab === 'safety' && activitySession && (
           <div className="demo-section demo-glance-panel">
-            <p className="eyebrow">{activitySession ? 'Safety' : 'Mistakes'}</p>
+            <p className="eyebrow">Safety</p>
             <ul className="demo-big-list">
               {demoMistakes.map((mistake, mistakeIndex) => (
                 <li key={`${exercise.id}-mistake-${mistakeIndex}`}>{mistake}</li>
@@ -875,37 +925,12 @@ const ExerciseDemoView = ({
           </div>
         )}
 
-        {demoTab === 'source' && (
-          <div className="demo-section demo-glance-panel">
-            <p className="eyebrow">Source</p>
-            <h3>{verifiedMedia?.title ?? 'No direct source attached'}</h3>
-            <div className="demo-source-facts">
-              <span>
-                Provider <strong>{verifiedMedia?.provider ?? 'RampRep review queue'}</strong>
-              </span>
-              <span>
-                Reviewed <strong>{verifiedMedia?.reviewedAtISO?.slice(0, 10) ?? 'pending'}</strong>
-              </span>
-              <span>
-                Type <strong>{hasVideo ? 'Video' : 'Article'}</strong>
-              </span>
-            </div>
-            <p>{verifiedMedia?.attributionText ?? 'RampRep has local instructions, but no reviewed exercise-specific external source yet.'}</p>
-            {sourceHref && (
-              <a className="ghost-button" href={sourceHref} target="_blank" rel="noreferrer">
-                <ExternalLink aria-hidden="true" size={18} />
-                {sourceActionLabel}
-              </a>
-            )}
-            {!sourceHref && hasChecklist && <p className="demo-checklist-note">This is a local checklist source with no external media link.</p>}
-          </div>
+        {activitySession && (
+          <p className="demo-attribution">
+            {verifiedMedia?.attributionText ?? 'No verified activity checklist is attached yet.'}
+            {verifiedMedia?.licenseName ? ` License: ${verifiedMedia.licenseName}.` : ''}
+          </p>
         )}
-
-        <p className="demo-attribution">
-          {verifiedMedia?.attributionText ?? (activitySession ? 'No verified activity checklist is attached yet.' : 'No verified motion media is attached yet.')}
-          {verifiedMedia?.licenseName ? ` License: ${verifiedMedia.licenseName}.` : ''}
-          {exercise.sourceReferences?.length ? ` Source: ${exercise.sourceReferences[0].provider}.` : ''}
-        </p>
       </main>
 
       <footer className="demo-view-footer">
@@ -952,7 +977,8 @@ const MediaCoveragePanel = ({ onFlash }: { onFlash: (message: string) => void })
         <span className="tag">{mediaCoverageRows.length} rows</span>
       </div>
       <div className="media-summary-grid" aria-label="Media coverage summary">
-        <span>Movement videos <strong>{mediaCoverageSummary.movementVideoCount}</strong></span>
+        <span>Default video coverage <strong>{defaultMovementVideoCoveragePercent}%</strong></span>
+        <span>Default movement videos <strong>{mediaCoverageSummary.defaultMovementVideoCount}/{mediaCoverageSummary.defaultMovementCount}</strong></span>
         <span>Movement articles <strong>{mediaCoverageSummary.movementArticleCount}</strong></span>
         <span>Movement missing <strong>{mediaCoverageSummary.movementMissingSourceCount}</strong></span>
         <span>Activity checklists <strong>{mediaCoverageSummary.activityChecklistCount}</strong></span>
@@ -2050,13 +2076,13 @@ function App() {
         <div className="brand-lockup">
           <LogoMark />
           <div>
-            <p className="eyebrow">RampRep · Ride Across America Preparation</p>
-              <h1>
-                {page === 'dashboard' && 'Today'}
-                {page === 'train' && 'Train'}
-                {page === 'ride' && 'Ride'}
-                {page === 'workouts' && 'Workouts'}
-                {page === 'log' && 'Workout Log'}
+            <p className="eyebrow">Ride Across America Preparation</p>
+            <h1>
+              {page === 'dashboard' && 'Today'}
+              {page === 'train' && 'Train'}
+              {page === 'ride' && 'Ride'}
+              {page === 'workouts' && 'Workouts'}
+              {page === 'log' && 'Workout Log'}
               {page === 'carbs' && 'Net Carbs'}
               {page === 'progress' && 'Progress'}
               {page === 'more' && 'More'}
