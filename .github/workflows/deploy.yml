@@ -1,4 +1,4 @@
-name: Deploy RampRep to GitHub Pages
+name: Deploy RAMprep to GitHub Pages
 
 on:
   push:

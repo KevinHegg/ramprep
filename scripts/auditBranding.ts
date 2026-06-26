@@ -3,7 +3,7 @@ import { join, relative } from 'node:path'
 
 const root = process.cwd()
 const forbidden = ['RampRep', 'RAMPREP', 'Ramprep', 'RamPrep']
-const scanRoots = ['README.md', 'index.html', 'vite.config.ts', 'src', 'public', 'docs/reports']
+const scanRoots = ['README.md', 'index.html', 'vite.config.ts', '.github', 'src', 'public', 'docs/reports']
 const textExtensions = new Set([
   '.css',
   '.html',
