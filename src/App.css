@@ -167,6 +167,10 @@
   letter-spacing: 0;
 }
 
+.eyebrow.preserve-case {
+  text-transform: none;
+}
+
 .status-pill,
 .tag {
   display: inline-flex;

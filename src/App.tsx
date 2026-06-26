@@ -3180,7 +3180,7 @@ function App() {
             <div className="about-brand">
               <img src={`${import.meta.env.BASE_URL}ramprep-logo-horizontal.svg`} alt="RAMprep logo" />
               <div>
-                <p className="eyebrow">About RAMprep</p>
+                <p className="eyebrow preserve-case">About RAMprep</p>
                 <h2>RAMprep</h2>
                 <p>Ride Across America Preparation</p>
               </div>
