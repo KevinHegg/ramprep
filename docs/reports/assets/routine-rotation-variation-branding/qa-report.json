@@ -1,0 +1,103 @@
+{
+  "shots": [
+    {
+      "file": "01-today-header-logo-390.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "390x844",
+      "bodyScrollWidth": 390,
+      "documentScrollWidth": 390,
+      "overflowX": 0,
+      "shellWidth": 390
+    },
+    {
+      "file": "02-train-next-routine-390.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "390x844",
+      "bodyScrollWidth": 390,
+      "documentScrollWidth": 390,
+      "overflowX": 0,
+      "shellWidth": 390
+    },
+    {
+      "file": "03-routine-browser-390.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "390x844",
+      "bodyScrollWidth": 390,
+      "documentScrollWidth": 390,
+      "overflowX": 0,
+      "shellWidth": 390
+    },
+    {
+      "file": "04-bench-posture-core-preview-390.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "390x844",
+      "bodyScrollWidth": 390,
+      "documentScrollWidth": 390,
+      "overflowX": 0,
+      "shellWidth": 390
+    },
+    {
+      "file": "05-hill-armor-load-preview-390.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "390x844",
+      "bodyScrollWidth": 390,
+      "documentScrollWidth": 390,
+      "overflowX": 0,
+      "shellWidth": 390
+    },
+    {
+      "file": "06-change-it-up-preview-390.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "390x844",
+      "bodyScrollWidth": 390,
+      "documentScrollWidth": 390,
+      "overflowX": 0,
+      "shellWidth": 390
+    },
+    {
+      "file": "07-apply-for-today-confirmed-390.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "390x844",
+      "bodyScrollWidth": 390,
+      "documentScrollWidth": 390,
+      "overflowX": 0,
+      "shellWidth": 390
+    },
+    {
+      "file": "08-make-defaults-confirmed-390.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "390x844",
+      "bodyScrollWidth": 390,
+      "documentScrollWidth": 390,
+      "overflowX": 0,
+      "shellWidth": 390
+    },
+    {
+      "file": "09-about-share-390.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "390x844",
+      "bodyScrollWidth": 390,
+      "documentScrollWidth": 390,
+      "overflowX": 0,
+      "shellWidth": 390
+    },
+    {
+      "file": "10-train-next-routine-430.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "430x932",
+      "bodyScrollWidth": 430,
+      "documentScrollWidth": 430,
+      "overflowX": 0,
+      "shellWidth": 402
+    },
+    {
+      "file": "11-wide-phone-frame-1440.png",
+      "url": "http://127.0.0.1:5173/ramprep/",
+      "viewport": "1440x900",
+      "bodyScrollWidth": 1440,
+      "documentScrollWidth": 1440,
+      "overflowX": 0,
+      "shellWidth": 402
+    }
+  ]
+}
