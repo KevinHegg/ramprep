@@ -20,7 +20,7 @@ const baseSource: ExerciseMediaSource = {
 }
 
 describe('exercise source validation', () => {
-  it('passes the curated RampRep media catalog', () => {
+  it('passes the curated RAMprep media catalog', () => {
     expect(validateExerciseSources(exerciseMediaSources)).toEqual([])
   })
 

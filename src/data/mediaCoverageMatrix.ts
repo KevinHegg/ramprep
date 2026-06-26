@@ -60,7 +60,7 @@ export const mediaCoverageRows: MediaCoverageRow[] = matrixExerciseIds.map((exer
     kind,
     defaultVisible,
     sourceType: source?.sourceKind ?? 'none',
-    provider: source?.provider ?? 'RampRep review queue',
+    provider: source?.provider ?? 'RAMprep review queue',
     title: source?.title ?? 'No source attached',
     behavior: behaviorForExerciseSource(source),
     directUrl: source?.directUrl ?? '',

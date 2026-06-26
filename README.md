@@ -1,14 +1,14 @@
-# RampRep
+# RAMprep
 
 Sweaty-thumb training, ride logging, and net-carb tracking for Ride Across America Preparation.
 
-RampRep means RAM Prep: a calm bike-tour preparation app for one private rider. The v1.2 interface is designed for an iPhone outdoors, with large text, giant primary buttons, one-exercise workout mode, a dedicated Ride screen, and a fast net-carb logger.
+RAMprep is a calm bike-tour preparation app for one private rider. The interface is designed for an iPhone outdoors, with large text, giant primary actions, one-exercise workout mode, embedded exercise videos, a dedicated Ride screen, and a fast net-carb logger.
 
 ## Brand
 
-- Identity: RampRep / Ride Across America Preparation
-- Logo: bike wheel, road line, and subtle ram-horn curve in `public/ramrep-logo.svg`
-- Icon assets: `public/favicon.svg`, `public/apple-touch-icon.svg`, and `public/pwa-icon.svg`
+- Identity: RAMprep / Ride Across America Preparation
+- Logo: bike wheel, route line, and RAMprep wordmark in `public/ramprep-logo-horizontal.svg`
+- Icon assets: `public/favicon.svg`, `public/ramprep-mark.svg`, `public/apple-touch-icon.png`, and `public/ramprep-social-card.png`
 - Palette: deep fjord blue, warm road clay, off-white paper, and pine green
 
 ## Stack
@@ -54,6 +54,14 @@ Run tests:
 npm test
 ```
 
+Run integrity audits:
+
+```bash
+npm run audit:media
+npm run audit:guides
+npm run audit:routines
+```
+
 ## GitHub Pages Deploy
 
 This repo is configured with `base: '/ramprep/'` in `vite.config.ts`, so the built app runs from the `KevinHegg/ramprep` GitHub Pages project path.
@@ -79,13 +87,13 @@ The build artifact root is `dist/`, and `public/.nojekyll` is copied into it.
 2. Open the site in Safari.
 3. Tap Share.
 4. Tap Add to Home Screen.
-5. Launch RampRep from the home-screen icon.
+5. Launch RAMprep from the home-screen icon.
 
 The app stores workout data locally in IndexedDB, so use Settings -> Backup to export JSON before changing devices or clearing browser data.
 
 ## PWA And Cache Notes
 
-RampRep registers a service worker from `/ramprep/sw.js` in production. Offline use is not the priority; the service worker uses a versioned, network-first strategy for app assets and does not cache external videos. The app surfaces an "Update available - refresh" prompt when a new service worker is ready.
+RAMprep registers a service worker from `/ramprep/sw.js` in production. Offline use is not the priority; the service worker uses a versioned, network-first strategy for app assets and does not cache external videos. The app surfaces an "Update available - refresh" prompt when a new service worker is ready.
 
 Workout logs, net-carb logs, settings, personal defaults, and roadmap data remain in IndexedDB. Settings includes a Clear local app cache action that preserves IndexedDB data. Clearing Safari site data or switching phones can still remove local data, so export a JSON backup first.
 
@@ -94,11 +102,14 @@ Workout logs, net-carb logs, settings, personal defaults, and roadmap data remai
 The first launch seeds:
 
 - Default exercises with structured instructions, cues, common mistakes, equipment, target areas, source references, and defaults.
-- Verified or needs-review demo source records. RampRep does not show fake SVG demos as primary media.
-- Five default routines:
+- Verified or needs-review demo source records. RAMprep does not show fake SVG demos as primary media.
+- Five rolling Train rotation routines:
   - Back + Hinge + Core
   - Legs + Cycling Support
   - Conditioning Circuit
+  - Bench + Posture + Core
+  - Hill Armor + Load
+- Supplemental recovery and mobility routines:
   - 10-Minute Mat Mobility
   - Recovery Core and Back
 - Bike/outdoor routine:
@@ -108,7 +119,7 @@ The first launch seeds:
 
 Seeding only happens when the app has no settings record. User edits are not overwritten. Settings includes a confirmed Reset demo data action.
 
-v1.1 adds migration-safe stores for personal exercise defaults, exercise media, and the tour roadmap. v1.2 adds the sweat-mode UI, Ride screen, curated RampRep library taxonomy, verified source catalog, giant net-carb logger, and versioned cache behavior. New seed content is added only when missing.
+v1.1 adds migration-safe stores for personal exercise defaults, exercise media, and the tour roadmap. v1.2 adds the sweat-mode UI, Ride screen, curated RAMprep library taxonomy, verified source catalog, giant net-carb logger, and versioned cache behavior. The current routine pass adds persisted Train rotation state, controlled routine variation overrides, and routine coverage auditing. New seed content is added only when missing.
 
 ## Backup And Export
 
@@ -126,10 +137,10 @@ The future payload shape is JSON rows containing workout date, routine name, exe
 
 ## Future Exercise Imports
 
-`src/services/wgerAdapter.ts` contains a future-ready adapter for mapping wger exercise metadata into RampRep exercises. The current app works fully offline from seeded local data.
+`src/services/wgerAdapter.ts` contains a future-ready adapter for mapping wger exercise metadata into RAMprep exercises. The current app works fully offline from seeded local data.
 
 ## Media And Source Strategy
 
-Exercise demos prioritize verified external pages or official YouTube embeds. RampRep links or embeds; it does not download, cache, scrape, or re-host YouTube videos. If a movement does not have a reviewed source, the demo screen says "Demo needs review" instead of faking motion media.
+Exercise demos prioritize verified external pages or official YouTube embeds. RAMprep links or embeds; it does not download, cache, scrape, or re-host YouTube videos. If a movement does not have a reviewed source, the demo screen says "Demo needs review" instead of faking motion media.
 
 The curated source list lives in `src/data/verifiedExerciseSources.ts`. Future imports should copy source, author, license name, license URL, and attribution text into `ExerciseMedia` before showing imported media. If license/source fields are unavailable or unclear, mark the item `needsReview`.

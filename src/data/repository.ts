@@ -4,11 +4,13 @@ import {
   seedExerciseMedia,
   seedExercises,
   seedRoadmap,
+  seedRoutineRotationState,
   seedRoutineExercises,
   seedRoutines,
   seedSchedule,
   seedSettings,
 } from './seed'
+import { advanceRoutineRotationState, normalizeRoutineRole, normalizeRoutineRotationState } from './routineRotation'
 import type {
   AppData,
   CarbEntry,
@@ -22,6 +24,8 @@ import type {
   PrivateSetting,
   Routine,
   RoutineExercise,
+  RoutineRotationState,
+  RoutineSessionOverride,
   SchedulePreference,
   SkipReason,
   TourRoadmap,
@@ -81,6 +85,8 @@ export const initializeAppData = async () => {
       db.exercises,
       db.routines,
       db.routineExercises,
+      db.routineRotationStates,
+      db.routineSessionOverrides,
       db.settings,
       db.equipment,
       db.schedulePreferences,
@@ -93,6 +99,7 @@ export const initializeAppData = async () => {
       await db.exercises.bulkPut(seedExercises)
       await db.routines.bulkPut(seedRoutines)
       await db.routineExercises.bulkPut(seedRoutineExercises)
+      await db.routineRotationStates.put({ ...seedRoutineRotationState, updatedAtISO: timestamp })
       await db.settings.put({ ...seedSettings, seededAt: timestamp, updatedAt: timestamp })
       await db.equipment.bulkPut(seedEquipment)
       await db.schedulePreferences.put({ ...seedSchedule, updatedAt: timestamp })
@@ -167,6 +174,7 @@ export const ensureV11Seeds = async () => {
     existingRoutineExercises,
     existingMedia,
     existingRoadmap,
+    existingRotationState,
     schedule,
   ] = await Promise.all([
     db.exercises.toArray(),
@@ -174,6 +182,7 @@ export const ensureV11Seeds = async () => {
     db.routineExercises.toArray(),
     db.exerciseMedia.toArray(),
     db.tourRoadmaps.get('default'),
+    db.routineRotationStates.get('default'),
     db.schedulePreferences.get('default'),
   ])
 
@@ -184,7 +193,15 @@ export const ensureV11Seeds = async () => {
 
   await db.transaction(
     'rw',
-    [db.exercises, db.routines, db.routineExercises, db.exerciseMedia, db.tourRoadmaps, db.schedulePreferences],
+    [
+      db.exercises,
+      db.routines,
+      db.routineExercises,
+      db.exerciseMedia,
+      db.tourRoadmaps,
+      db.routineRotationStates,
+      db.schedulePreferences,
+    ],
     async () => {
       const missingExercises = seedExercises.filter((item) => !exerciseIds.has(item.id))
       const missingRoutines = seedRoutines.filter((item) => !routineIds.has(item.id))
@@ -262,6 +279,28 @@ export const ensureV11Seeds = async () => {
       if (missingRoutines.length) {
         await db.routines.bulkPut(missingRoutines)
       }
+      const seededRoutineById = new Map(seedRoutines.map((item) => [item.id, item]))
+      const routineMetadataUpdates = existingRoutines.flatMap((routine) => {
+        const seedRoutine = seededRoutineById.get(routine.id)
+        if (!seedRoutine) {
+          return []
+        }
+
+        const role = normalizeRoutineRole(routine)
+        const nextRoutine = {
+          ...routine,
+          role,
+          purpose: routine.purpose ?? seedRoutine.purpose,
+          notes: routine.notes ?? seedRoutine.notes,
+          updatedAt: routine.updatedAt ?? nowIso(),
+        }
+
+        return role !== routine.role || !routine.purpose ? [nextRoutine] : []
+      })
+
+      if (routineMetadataUpdates.length) {
+        await db.routines.bulkPut(routineMetadataUpdates)
+      }
       if (missingRoutineExercises.length) {
         await db.routineExercises.bulkPut(missingRoutineExercises)
       }
@@ -278,6 +317,11 @@ export const ensureV11Seeds = async () => {
       await db.routineExercises.bulkPut(seedRoutineExercises)
       if (missingMedia.length) {
         await db.exerciseMedia.bulkPut(missingMedia)
+      }
+      if (!existingRotationState) {
+        await db.routineRotationStates.put({ ...seedRoutineRotationState, updatedAtISO: nowIso() })
+      } else {
+        await db.routineRotationStates.put(normalizeRoutineRotationState(existingRotationState, nowIso()))
       }
       if (!existingRoadmap) {
         await db.tourRoadmaps.add({ ...seedRoadmap, updatedAt: nowIso() })
@@ -309,6 +353,8 @@ export const resetDemoData = async () => {
       db.exercises,
       db.routines,
       db.routineExercises,
+      db.routineRotationStates,
+      db.routineSessionOverrides,
       db.workoutLogs,
       db.exerciseLogEntries,
       db.settings,
@@ -329,6 +375,8 @@ export const resetDemoData = async () => {
         db.exercises.clear(),
         db.routines.clear(),
         db.routineExercises.clear(),
+        db.routineRotationStates.clear(),
+        db.routineSessionOverrides.clear(),
         db.workoutLogs.clear(),
         db.exerciseLogEntries.clear(),
         db.settings.clear(),
@@ -347,6 +395,7 @@ export const resetDemoData = async () => {
       await db.exercises.bulkAdd(seedExercises)
       await db.routines.bulkAdd(seedRoutines)
       await db.routineExercises.bulkAdd(seedRoutineExercises)
+      await db.routineRotationStates.add({ ...seedRoutineRotationState, updatedAtISO: timestamp })
       await db.settings.add({ ...seedSettings, seededAt: timestamp, updatedAt: timestamp })
       await db.equipment.bulkAdd(seedEquipment)
       await db.schedulePreferences.add({ ...seedSchedule, updatedAt: timestamp })
@@ -363,6 +412,8 @@ export const getAppData = async (): Promise<AppData> => {
     exercises,
     routines,
     routineExercises,
+    routineRotationState,
+    routineSessionOverrides,
     workoutLogs,
     exerciseLogEntries,
     personalExerciseDefaults,
@@ -380,6 +431,8 @@ export const getAppData = async (): Promise<AppData> => {
     db.exercises.orderBy('name').toArray(),
     db.routines.orderBy('order').toArray(),
     db.routineExercises.orderBy('order').toArray(),
+    db.routineRotationStates.get('default'),
+    db.routineSessionOverrides.toArray(),
     db.workoutLogs.orderBy('completedAt').reverse().toArray(),
     db.exerciseLogEntries.toArray(),
     db.personalExerciseDefaults.toArray(),
@@ -404,6 +457,8 @@ export const getAppData = async (): Promise<AppData> => {
     exercises,
     routines,
     routineExercises,
+    routineRotationState: normalizeRoutineRotationState(routineRotationState, nowIso()),
+    routineSessionOverrides,
     workoutLogs,
     exerciseLogEntries,
     personalExerciseDefaults,
@@ -590,6 +645,38 @@ export const saveSchedule = async (schedule: SchedulePreference) => {
   await db.schedulePreferences.put({ ...schedule, updatedAt: nowIso() })
 }
 
+export const saveRoutineRotationState = async (state: RoutineRotationState) => {
+  await db.routineRotationStates.put({ ...state, updatedAtISO: nowIso() })
+}
+
+export const saveRoutineSessionOverride = async (
+  override: Omit<RoutineSessionOverride, 'id' | 'createdAtISO'> & { id?: string; createdAtISO?: string },
+) => {
+  const timestamp = nowIso()
+  const next: RoutineSessionOverride = {
+    ...override,
+    id: override.id ?? createId('routine-override'),
+    createdAtISO: override.createdAtISO ?? timestamp,
+  }
+
+  await db.routineSessionOverrides.put(next)
+  return next
+}
+
+export const deleteRoutineSessionOverrides = async (
+  routineId: string,
+  scope?: RoutineSessionOverride['scope'],
+) => {
+  const overrides = await db.routineSessionOverrides.where('routineId').equals(routineId).toArray()
+  const ids = overrides
+    .filter((override) => !scope || override.scope === scope)
+    .map((override) => override.id)
+
+  if (ids.length) {
+    await db.routineSessionOverrides.bulkDelete(ids)
+  }
+}
+
 export const saveRoadmap = async (roadmap: TourRoadmap) => {
   await db.tourRoadmaps.put({ ...roadmap, updatedAt: nowIso() })
 }
@@ -639,6 +726,11 @@ export const createWorkoutLog = async (
   options: { totalMinutes?: number; notes?: string; travelMode?: boolean; deloadApplied?: boolean } = {},
 ) => {
   const timestamp = nowIso()
+  const fullRoutine = routine.id ? await db.routines.get(routine.id) : undefined
+  const shouldAdvanceRotation = Boolean(fullRoutine && normalizeRoutineRole(fullRoutine) === 'rotation')
+  const rotationState = shouldAdvanceRotation
+    ? normalizeRoutineRotationState(await db.routineRotationStates.get('default'), timestamp)
+    : undefined
   const workoutLogId = createId('log')
   const workoutLog: WorkoutLog = {
     id: workoutLogId,
@@ -660,29 +752,47 @@ export const createWorkoutLog = async (
     workoutLogId,
   }))
 
-  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, db.personalExerciseDefaults, async () => {
+  await db.transaction('rw', db.workoutLogs, db.exerciseLogEntries, db.personalExerciseDefaults, db.routineRotationStates, async () => {
     await db.workoutLogs.add(workoutLog)
     if (logEntries.length) {
       await db.exerciseLogEntries.bulkAdd(logEntries)
       await Promise.all(logEntries.map(updateExerciseDefaultsFromLog))
+    }
+    if (shouldAdvanceRotation && rotationState && routine.id) {
+      await db.routineRotationStates.put(advanceRoutineRotationState(rotationState, routine.id, timestamp))
     }
   })
 
   return workoutLogId
 }
 
-export const createSkippedWorkout = async (routine: Routine, skipReason: SkipReason, notes?: string) => {
+export const createSkippedWorkout = async (
+  routine: Routine,
+  skipReason: SkipReason,
+  notes?: string,
+  options: { advanceRotation?: boolean } = {},
+) => {
   const timestamp = nowIso()
-  await db.workoutLogs.add({
-    id: createId('log'),
-    routineId: routine.id,
-    routineName: routine.name,
-    completedAt: timestamp,
-    status: 'skipped',
-    skipReason,
-    notes,
-    createdAt: timestamp,
-    updatedAt: timestamp,
+  const shouldAdvanceRotation = Boolean(options.advanceRotation && normalizeRoutineRole(routine) === 'rotation')
+  const rotationState = shouldAdvanceRotation
+    ? normalizeRoutineRotationState(await db.routineRotationStates.get('default'), timestamp)
+    : undefined
+
+  await db.transaction('rw', db.workoutLogs, db.routineRotationStates, async () => {
+    await db.workoutLogs.add({
+      id: createId('log'),
+      routineId: routine.id,
+      routineName: routine.name,
+      completedAt: timestamp,
+      status: 'skipped',
+      skipReason,
+      notes,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    })
+    if (shouldAdvanceRotation && rotationState) {
+      await db.routineRotationStates.put(advanceRoutineRotationState(rotationState, routine.id, timestamp))
+    }
   })
 }
 
@@ -711,7 +821,7 @@ export const exportAllData = async (_options: { includePrivateSettings?: boolean
   const data = await getAppData()
   return JSON.stringify(
     {
-      schemaVersion: 2,
+      schemaVersion: 3,
       exportedAt: nowIso(),
       privateSettingsIncluded: false,
       data: {
@@ -730,7 +840,7 @@ export const importAllData = async (rawJson: string) => {
   const data = 'data' in parsed && parsed.data ? parsed.data : (parsed as AppData)
 
   if (!data.exercises || !data.routines || !data.settings || !data.schedule) {
-    throw new Error('Import file is missing required RampRep data.')
+    throw new Error('Import file is missing required RAMprep data.')
   }
 
   await db.transaction(
@@ -739,6 +849,8 @@ export const importAllData = async (rawJson: string) => {
       db.exercises,
       db.routines,
       db.routineExercises,
+      db.routineRotationStates,
+      db.routineSessionOverrides,
       db.workoutLogs,
       db.exerciseLogEntries,
       db.settings,
@@ -759,6 +871,8 @@ export const importAllData = async (rawJson: string) => {
         db.exercises.clear(),
         db.routines.clear(),
         db.routineExercises.clear(),
+        db.routineRotationStates.clear(),
+        db.routineSessionOverrides.clear(),
         db.workoutLogs.clear(),
         db.exerciseLogEntries.clear(),
         db.settings.clear(),
@@ -777,6 +891,10 @@ export const importAllData = async (rawJson: string) => {
       await db.exercises.bulkAdd(data.exercises)
       await db.routines.bulkAdd(data.routines)
       await db.routineExercises.bulkAdd(data.routineExercises ?? [])
+      await db.routineRotationStates.add(
+        normalizeRoutineRotationState(data.routineRotationState, timestamp),
+      )
+      await db.routineSessionOverrides.bulkAdd(data.routineSessionOverrides ?? [])
       await db.workoutLogs.bulkAdd(data.workoutLogs ?? [])
       await db.exerciseLogEntries.bulkAdd(data.exerciseLogEntries ?? [])
       await db.personalExerciseDefaults.bulkAdd(data.personalExerciseDefaults ?? [])

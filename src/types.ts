@@ -18,6 +18,16 @@ export type EquipmentKind =
 
 export type Difficulty = 'beginner' | 'intermediate' | 'advanced'
 export type RoutineType = 'strength' | 'conditioning' | 'mobility' | 'recovery' | 'bike'
+export type RoutineRole = 'rotation' | 'supplemental' | 'ride'
+export type RoutineSlotKind =
+  | 'mobility'
+  | 'kneeDominant'
+  | 'hingeGlute'
+  | 'pullPosture'
+  | 'push'
+  | 'core'
+  | 'carry'
+  | 'calf'
 export type WorkoutStatus = 'completed' | 'skipped'
 export type SkipReason =
   | 'work'
@@ -115,9 +125,11 @@ export interface Routine {
   id: ID
   name: string
   type: RoutineType
+  role: RoutineRole
   enabled: boolean
   order: number
   estimatedMinutes: number
+  purpose?: string
   notes?: string
   createdAt: string
   updatedAt: string
@@ -137,6 +149,38 @@ export interface RoutineExercise {
   notes?: string
   variationKey?: string
   variationOptions?: string[]
+  slotKind?: RoutineSlotKind
+  anchor?: boolean
+  allowedExerciseIds?: string[]
+}
+
+export interface RoutineRotationHistoryEntry {
+  routineId: ID
+  completedAtISO: string
+}
+
+export interface RoutineRotationState {
+  id: 'default'
+  sequence: ID[]
+  nextRoutineId: ID
+  lastCompletedRotationRoutineId?: ID
+  completedRotationHistory: RoutineRotationHistoryEntry[]
+  updatedAtISO: string
+}
+
+export interface RoutineSessionReplacement {
+  slotId: ID
+  originalExerciseId: ID
+  selectedExerciseId: ID
+}
+
+export interface RoutineSessionOverride {
+  id: ID
+  routineId: ID
+  sessionDateISO: string
+  replacements: RoutineSessionReplacement[]
+  scope: 'todayOnly' | 'routineDefault'
+  createdAtISO: string
 }
 
 export interface ExerciseLogEntry {
@@ -372,6 +416,8 @@ export interface AppData {
   exercises: Exercise[]
   routines: Routine[]
   routineExercises: RoutineExercise[]
+  routineRotationState: RoutineRotationState
+  routineSessionOverrides: RoutineSessionOverride[]
   workoutLogs: WorkoutLog[]
   exerciseLogEntries: ExerciseLogEntry[]
   personalExerciseDefaults: PersonalExerciseDefault[]

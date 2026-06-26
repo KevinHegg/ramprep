@@ -8,6 +8,8 @@ import type {
   ExerciseMedia,
   Routine,
   RoutineExercise,
+  RoutineRotationState,
+  RoutineSlotKind,
   SchedulePreference,
   TourRoadmap,
   UserSettings,
@@ -15,7 +17,7 @@ import type {
 import { instructionReviewForExercise } from './exerciseInstructionCatalog'
 
 const seedTimestamp = '2026-01-01T12:00:00.000Z'
-const localAttribution = 'Original local seed data created for RampRep.'
+const localAttribution = 'Original local seed data created for RAMprep.'
 
 interface ExerciseSeed {
   id: string
@@ -900,25 +902,46 @@ export const retiredExerciseRecords = [
 
 export const seedExerciseMedia: ExerciseMedia[] = []
 
-const routineBase = (id: string, name: string, type: Routine['type'], order: number, estimatedMinutes: number, notes?: string): Routine => ({
+export const trainRotationRoutineIds = [
+  'routine-a-back-hinge-core',
+  'routine-b-legs-cycling-support',
+  'routine-c-conditioning-circuit',
+  'routine-g-bench-posture-core',
+  'routine-h-hill-armor-load',
+] as const
+
+const routineBase = (
+  id: string,
+  name: string,
+  type: Routine['type'],
+  role: Routine['role'],
+  order: number,
+  estimatedMinutes: number,
+  purpose?: string,
+  notes?: string,
+): Routine => ({
   id,
   name,
   type,
+  role,
   enabled: true,
   order,
   estimatedMinutes,
+  purpose,
   notes,
   createdAt: seedTimestamp,
   updatedAt: seedTimestamp,
 })
 
 export const seedRoutines: Routine[] = [
-  routineBase('routine-a-back-hinge-core', 'Back + Hinge + Core', 'strength', 1, 45),
-  routineBase('routine-b-legs-cycling-support', 'Legs + Cycling Support', 'strength', 2, 45),
-  routineBase('routine-c-conditioning-circuit', 'Conditioning Circuit', 'conditioning', 3, 30, '4-6 controlled rounds with 60-90 seconds rest. Keep every movement crisp before adding load.'),
-  routineBase('routine-d-10-minute-mat-mobility', '10-Minute Mat Mobility', 'mobility', 4, 10),
-  routineBase('routine-e-recovery-core-back', 'Recovery Core and Back', 'recovery', 5, 20),
-  routineBase('routine-f-burley-loaded-trailer-ride', 'Burley Loaded Trailer Ride', 'bike', 6, 60, 'Conditioning ride with dog comfort as mandatory. Start with empty trailer practice before dog-loaded rides. Avoid heat, traffic, excessive speed, and hard hill repeats with the dog.'),
+  routineBase('routine-a-back-hinge-core', 'Back + Hinge + Core', 'strength', 'rotation', 1, 45, 'Posterior chain, upper-back strength, loaded carry, and core control.'),
+  routineBase('routine-b-legs-cycling-support', 'Legs + Cycling Support', 'strength', 'rotation', 2, 45, 'Climbing legs, hinge durability, pressing balance, and calf capacity.'),
+  routineBase('routine-c-conditioning-circuit', 'Conditioning Circuit', 'conditioning', 'rotation', 3, 30, 'Crisp full-body conditioning that preserves movement quality.', '4-6 controlled rounds with 60-90 seconds rest. Keep every movement crisp before adding load.'),
+  routineBase('routine-d-10-minute-mat-mobility', '10-Minute Mat Mobility', 'mobility', 'supplemental', 4, 10, 'A short mobility reset for hips, ankles, and upper back.'),
+  routineBase('routine-e-recovery-core-back', 'Recovery Core and Back', 'recovery', 'supplemental', 5, 20, 'Easy core and back durability work for lower-energy days.'),
+  routineBase('routine-f-burley-loaded-trailer-ride', 'Burley Loaded Trailer Ride', 'bike', 'ride', 6, 60, 'Trailer-specific ride handling and easy conditioning.', 'Conditioning ride with dog comfort as mandatory. Start with empty trailer practice before dog-loaded rides. Avoid heat, traffic, excessive speed, and hard hill repeats with the dog.'),
+  routineBase('routine-g-bench-posture-core', 'Bench + Posture + Core', 'strength', 'rotation', 7, 45, 'Portable-bench upper-back durability, pressing strength, hip extension, anti-rotation, and loaded trunk stability.', 'Mostly RPE 6-7. Leave 2-3 good reps in reserve. Rest 60-90 seconds, or up to 120 seconds after harder sets. Use a safe stair, platform, or rated step for step-ups; do not use the portable bench for step-ups unless bench step-ups are explicitly marked safe.'),
+  routineBase('routine-h-hill-armor-load', 'Hill Armor + Load', 'strength', 'rotation', 8, 45, 'Climbing legs, posterior-chain endurance, calf capacity, trunk stiffness, and load tolerance.', 'RPE 6-7. Leave 2-3 reps in reserve and prioritize repeatability over exhaustion. Use a lighter version after hard hill repeats, high-effort loaded gravel, or ruck discomfort in the previous 24 hours.'),
 ]
 
 const exerciseIdByName = new Map(seedExercises.map((exercise) => [exercise.name, exercise.id]))
@@ -938,30 +961,40 @@ const routineExercise = (
   ...details,
 })
 
+const slotDetails = (
+  slotKind: RoutineSlotKind,
+  anchor: boolean,
+  allowedExerciseIds: string[],
+): Pick<RoutineExercise, 'slotKind' | 'anchor' | 'allowedExerciseIds'> => ({
+  slotKind,
+  anchor,
+  allowedExerciseIds,
+})
+
 export const seedRoutineExercises: RoutineExercise[] = [
-  routineExercise('routine-a-back-hinge-core', '90/90 hip switch', 'warmup', 1, { sets: 1, reps: '6 each side', side: 'each' }),
-  routineExercise('routine-a-back-hinge-core', 'floor glute bridge', 'warmup', 2, { sets: 2, reps: '8-10' }),
-  routineExercise('routine-a-back-hinge-core', 'kettlebell deadlift', 'main', 3, { sets: 3, reps: '8' }),
-  routineExercise('routine-a-back-hinge-core', 'goblet squat', 'main', 4, { sets: 3, reps: '8' }),
-  routineExercise('routine-a-back-hinge-core', 'bench-supported one-arm dumbbell row', 'main', 5, { sets: 3, reps: '10 each side', side: 'each' }),
-  routineExercise('routine-a-back-hinge-core', 'suitcase carry', 'main', 6, { sets: 4, durationSeconds: 45, side: 'each', notes: 'Build toward 60 seconds each side.' }),
-  routineExercise('routine-a-back-hinge-core', 'dead bug', 'main', 7, { sets: 2, reps: '8 each side', side: 'each' }),
-  routineExercise('routine-a-back-hinge-core', 'side plank', 'main', 8, { sets: 2, durationSeconds: 30, side: 'each', notes: 'Add a third set when 40 seconds is clean.' }),
+  routineExercise('routine-a-back-hinge-core', '90/90 hip switch', 'warmup', 1, { sets: 1, reps: '6 each side', side: 'each', ...slotDetails('mobility', false, ['90-90-hip-switch', 'thoracic-open-book', 'ankle-rocks', 'low-lunge-hip-flexor-stretch']) }),
+  routineExercise('routine-a-back-hinge-core', 'floor glute bridge', 'warmup', 2, { sets: 2, reps: '8-10', ...slotDetails('hingeGlute', false, ['kettlebell-deadlift', 'dumbbell-romanian-deadlift', 'floor-glute-bridge', 'bench-hip-thrust']) }),
+  routineExercise('routine-a-back-hinge-core', 'kettlebell deadlift', 'main', 3, { sets: 3, reps: '8', ...slotDetails('hingeGlute', true, ['kettlebell-deadlift', 'dumbbell-romanian-deadlift']) }),
+  routineExercise('routine-a-back-hinge-core', 'goblet squat', 'main', 4, { sets: 3, reps: '8', ...slotDetails('kneeDominant', false, ['goblet-squat', 'step-up', 'split-squat']) }),
+  routineExercise('routine-a-back-hinge-core', 'bench-supported one-arm dumbbell row', 'main', 5, { sets: 3, reps: '10 each side', side: 'each', ...slotDetails('pullPosture', true, ['bench-supported-one-arm-row', 'band-pull-apart', 'band-face-pull']) }),
+  routineExercise('routine-a-back-hinge-core', 'suitcase carry', 'main', 6, { sets: 4, durationSeconds: 45, side: 'each', notes: 'Build toward 60 seconds each side.', ...slotDetails('carry', false, ['farmer-carry', 'suitcase-carry']) }),
+  routineExercise('routine-a-back-hinge-core', 'dead bug', 'main', 7, { sets: 2, reps: '8 each side', side: 'each', ...slotDetails('core', false, ['dead-bug', 'bird-dog', 'pallof-press', 'side-plank']) }),
+  routineExercise('routine-a-back-hinge-core', 'side plank', 'main', 8, { sets: 2, durationSeconds: 30, side: 'each', notes: 'Add a third set when 40 seconds is clean.', ...slotDetails('core', false, ['dead-bug', 'bird-dog', 'pallof-press', 'side-plank']) }),
 
-  routineExercise('routine-b-legs-cycling-support', 'step-up', 'main', 1, { sets: 3, reps: '8 each leg', side: 'each' }),
-  routineExercise('routine-b-legs-cycling-support', 'dumbbell Romanian deadlift', 'main', 2, { sets: 3, reps: '8' }),
-  routineExercise('routine-b-legs-cycling-support', 'split squat', 'main', 3, { sets: 3, reps: '8 each leg', side: 'each', notes: 'Use 2 sets on lower-energy days.' }),
-  routineExercise('routine-b-legs-cycling-support', 'dumbbell bench press', 'main', 4, { sets: 3, reps: '8-12' }),
-  routineExercise('routine-b-legs-cycling-support', 'band pull-apart', 'main', 5, { sets: 3, reps: '15' }),
-  routineExercise('routine-b-legs-cycling-support', 'bird dog', 'main', 6, { sets: 2, reps: '8 each side', side: 'each' }),
-  routineExercise('routine-b-legs-cycling-support', 'bench hip thrust', 'main', 7, { sets: 2, reps: '8-10', notes: 'Start bodyweight with controlled tempo around effort 5-6/10.' }),
-  routineExercise('routine-b-legs-cycling-support', 'calf raise', 'main', 8, { sets: 3, reps: '12' }),
+  routineExercise('routine-b-legs-cycling-support', 'step-up', 'main', 1, { sets: 3, reps: '8 each leg', side: 'each', ...slotDetails('kneeDominant', true, ['goblet-squat', 'step-up', 'split-squat']) }),
+  routineExercise('routine-b-legs-cycling-support', 'dumbbell Romanian deadlift', 'main', 2, { sets: 3, reps: '8', ...slotDetails('hingeGlute', true, ['kettlebell-deadlift', 'dumbbell-romanian-deadlift', 'floor-glute-bridge', 'bench-hip-thrust']) }),
+  routineExercise('routine-b-legs-cycling-support', 'split squat', 'main', 3, { sets: 3, reps: '8 each leg', side: 'each', notes: 'Use 2 sets on lower-energy days.', ...slotDetails('kneeDominant', false, ['goblet-squat', 'step-up', 'split-squat']) }),
+  routineExercise('routine-b-legs-cycling-support', 'dumbbell bench press', 'main', 4, { sets: 3, reps: '8-12', ...slotDetails('push', false, ['dumbbell-bench-press']) }),
+  routineExercise('routine-b-legs-cycling-support', 'band pull-apart', 'main', 5, { sets: 3, reps: '15', ...slotDetails('pullPosture', false, ['bench-supported-one-arm-row', 'band-pull-apart', 'band-face-pull']) }),
+  routineExercise('routine-b-legs-cycling-support', 'bird dog', 'main', 6, { sets: 2, reps: '8 each side', side: 'each', ...slotDetails('core', false, ['dead-bug', 'bird-dog', 'pallof-press', 'side-plank']) }),
+  routineExercise('routine-b-legs-cycling-support', 'bench hip thrust', 'main', 7, { sets: 2, reps: '8-10', notes: 'Start bodyweight with controlled tempo around effort 5-6/10.', ...slotDetails('hingeGlute', false, ['kettlebell-deadlift', 'dumbbell-romanian-deadlift', 'floor-glute-bridge', 'bench-hip-thrust']) }),
+  routineExercise('routine-b-legs-cycling-support', 'calf raise', 'main', 8, { sets: 3, reps: '12', ...slotDetails('calf', false, ['calf-raise']) }),
 
-  routineExercise('routine-c-conditioning-circuit', 'kettlebell deadlift', 'circuit', 1, { reps: '8' }),
-  routineExercise('routine-c-conditioning-circuit', 'goblet squat', 'circuit', 2, { reps: '8' }),
-  routineExercise('routine-c-conditioning-circuit', 'bench-supported one-arm dumbbell row', 'circuit', 3, { reps: '8 each side', side: 'each' }),
-  routineExercise('routine-c-conditioning-circuit', 'Pallof press', 'circuit', 4, { reps: '10 each side', side: 'each' }),
-  routineExercise('routine-c-conditioning-circuit', 'farmer carry', 'circuit', 5, { durationSeconds: 45 }),
+  routineExercise('routine-c-conditioning-circuit', 'kettlebell deadlift', 'circuit', 1, { reps: '8', ...slotDetails('hingeGlute', false, ['kettlebell-deadlift', 'dumbbell-romanian-deadlift', 'floor-glute-bridge', 'bench-hip-thrust']) }),
+  routineExercise('routine-c-conditioning-circuit', 'goblet squat', 'circuit', 2, { reps: '8', ...slotDetails('kneeDominant', false, ['goblet-squat', 'step-up', 'split-squat']) }),
+  routineExercise('routine-c-conditioning-circuit', 'bench-supported one-arm dumbbell row', 'circuit', 3, { reps: '8 each side', side: 'each', ...slotDetails('pullPosture', false, ['bench-supported-one-arm-row', 'band-pull-apart', 'band-face-pull']) }),
+  routineExercise('routine-c-conditioning-circuit', 'Pallof press', 'circuit', 4, { reps: '10 each side', side: 'each', ...slotDetails('core', false, ['dead-bug', 'bird-dog', 'pallof-press', 'side-plank']) }),
+  routineExercise('routine-c-conditioning-circuit', 'farmer carry', 'circuit', 5, { durationSeconds: 45, ...slotDetails('carry', true, ['farmer-carry', 'suitcase-carry']) }),
 
   routineExercise('routine-d-10-minute-mat-mobility', '90/90 hip switch', 'mobility', 1, { sets: 1, reps: '6 each side', side: 'each' }),
   routineExercise('routine-d-10-minute-mat-mobility', 'thoracic open book', 'mobility', 2, { reps: '8 each side', side: 'each' }),
@@ -973,6 +1006,23 @@ export const seedRoutineExercises: RoutineExercise[] = [
   routineExercise('routine-e-recovery-core-back', 'side plank', 'recovery', 3, { sets: 2, durationSeconds: 25, side: 'each' }),
   routineExercise('routine-e-recovery-core-back', 'floor glute bridge', 'recovery', 4, { sets: 2, reps: '8-10' }),
   routineExercise('routine-e-recovery-core-back', 'thoracic open book', 'recovery', 5, { reps: '8 each side', side: 'each' }),
+
+  routineExercise('routine-g-bench-posture-core', 'thoracic open book', 'warmup', 1, { sets: 1, reps: '6 each side', side: 'each', ...slotDetails('mobility', false, ['90-90-hip-switch', 'thoracic-open-book', 'ankle-rocks', 'low-lunge-hip-flexor-stretch']) }),
+  routineExercise('routine-g-bench-posture-core', 'step-up', 'main', 2, { sets: 2, reps: '8 each leg', side: 'each', notes: 'Use a safe stair, platform, or rated step. Do not use the portable bench unless bench step-ups are explicitly marked safe.', ...slotDetails('kneeDominant', false, ['goblet-squat', 'step-up', 'split-squat']) }),
+  routineExercise('routine-g-bench-posture-core', 'bench-supported one-arm dumbbell row', 'main', 3, { sets: 3, reps: '10 each side', side: 'each', ...slotDetails('pullPosture', true, ['bench-supported-one-arm-row', 'band-pull-apart', 'band-face-pull']) }),
+  routineExercise('routine-g-bench-posture-core', 'dumbbell bench press', 'main', 4, { sets: 3, reps: '8-12', ...slotDetails('push', true, ['dumbbell-bench-press']) }),
+  routineExercise('routine-g-bench-posture-core', 'bench hip thrust', 'main', 5, { sets: 3, reps: '8-10', notes: 'Start bodyweight if appropriate. Use controlled tempo around effort 5-7/10.', ...slotDetails('hingeGlute', false, ['kettlebell-deadlift', 'dumbbell-romanian-deadlift', 'floor-glute-bridge', 'bench-hip-thrust']) }),
+  routineExercise('routine-g-bench-posture-core', 'band face pull', 'main', 6, { sets: 3, reps: '12-15', ...slotDetails('pullPosture', false, ['bench-supported-one-arm-row', 'band-pull-apart', 'band-face-pull']) }),
+  routineExercise('routine-g-bench-posture-core', 'Pallof press', 'main', 7, { sets: 2, reps: '10 each side', side: 'each', ...slotDetails('core', false, ['dead-bug', 'bird-dog', 'pallof-press', 'side-plank']) }),
+  routineExercise('routine-g-bench-posture-core', 'suitcase carry', 'main', 8, { sets: 3, durationSeconds: 45, side: 'each', notes: 'Use 30-45 seconds each side.', ...slotDetails('carry', false, ['farmer-carry', 'suitcase-carry']) }),
+
+  routineExercise('routine-h-hill-armor-load', 'ankle dorsiflexion rocks', 'warmup', 1, { sets: 1, reps: '8 each side', side: 'each', ...slotDetails('mobility', false, ['90-90-hip-switch', 'thoracic-open-book', 'ankle-rocks', 'low-lunge-hip-flexor-stretch']) }),
+  routineExercise('routine-h-hill-armor-load', 'goblet squat', 'main', 2, { sets: 3, reps: '8', ...slotDetails('kneeDominant', true, ['goblet-squat', 'step-up', 'split-squat']) }),
+  routineExercise('routine-h-hill-armor-load', 'dumbbell Romanian deadlift', 'main', 3, { sets: 3, reps: '8', ...slotDetails('hingeGlute', true, ['kettlebell-deadlift', 'dumbbell-romanian-deadlift', 'floor-glute-bridge', 'bench-hip-thrust']) }),
+  routineExercise('routine-h-hill-armor-load', 'split squat', 'main', 4, { sets: 2, reps: '8 each leg', side: 'each', ...slotDetails('kneeDominant', false, ['goblet-squat', 'step-up', 'split-squat']) }),
+  routineExercise('routine-h-hill-armor-load', 'calf raise', 'main', 5, { sets: 3, reps: '12', ...slotDetails('calf', false, ['calf-raise']) }),
+  routineExercise('routine-h-hill-armor-load', 'farmer carry', 'main', 6, { sets: 3, durationSeconds: 45, notes: 'Use 40-45 seconds.', ...slotDetails('carry', false, ['farmer-carry', 'suitcase-carry']) }),
+  routineExercise('routine-h-hill-armor-load', 'dead bug', 'main', 7, { sets: 2, reps: '8 each side', side: 'each', ...slotDetails('core', false, ['dead-bug', 'bird-dog', 'pallof-press', 'side-plank']) }),
 
   routineExercise('routine-f-burley-loaded-trailer-ride', 'Burley loaded trailer ride', 'precheck', 1, { notes: 'Pre-check tires, hitch, leash/harness, water, route, weather, and dog comfort.' }),
   routineExercise('routine-f-burley-loaded-trailer-ride', 'easy endurance ride', 'warmup', 2, { durationSeconds: 600, notes: '10 min easy warmup before adding any climbing.' }),
@@ -1025,6 +1075,14 @@ export const seedSchedule: SchedulePreference = {
   recoveryWeek: false,
   deloadEveryFourthWeek: true,
   updatedAt: seedTimestamp,
+}
+
+export const seedRoutineRotationState: RoutineRotationState = {
+  id: 'default',
+  sequence: [...trainRotationRoutineIds],
+  nextRoutineId: trainRotationRoutineIds[0],
+  completedRotationHistory: [],
+  updatedAtISO: seedTimestamp,
 }
 
 export const seedRoadmap: TourRoadmap = {

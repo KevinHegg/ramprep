@@ -14,12 +14,14 @@ import type {
   TourRoadmap,
   Routine,
   RoutineExercise,
+  RoutineRotationState,
+  RoutineSessionOverride,
   SchedulePreference,
   UserSettings,
   WorkoutLog,
 } from '../types'
 
-export class RampRepDatabase extends Dexie {
+export class RAMprepDatabase extends Dexie {
   exercises!: Table<Exercise, string>
   routines!: Table<Routine, string>
   routineExercises!: Table<RoutineExercise, string>
@@ -28,6 +30,8 @@ export class RampRepDatabase extends Dexie {
   personalExerciseDefaults!: Table<PersonalExerciseDefault, string>
   exerciseMedia!: Table<ExerciseMedia, string>
   tourRoadmaps!: Table<TourRoadmap, string>
+  routineRotationStates!: Table<RoutineRotationState, string>
+  routineSessionOverrides!: Table<RoutineSessionOverride, string>
   settings!: Table<UserSettings, string>
   equipment!: Table<Equipment, string>
   schedulePreferences!: Table<SchedulePreference, string>
@@ -123,7 +127,29 @@ export class RampRepDatabase extends Dexie {
       foodLookupCache: '&id, source, queryOrSourceId, expiresAt',
       privateSettings: '&key, updatedAt',
     })
+
+    this.version(6).stores({
+      exercises: '&id, name, difficulty, group',
+      routines: '&id, enabled, order, type, role',
+      routineExercises: '&id, routineId, exerciseId, section, order, slotKind',
+      routineRotationStates: '&id, updatedAtISO',
+      routineSessionOverrides: '&id, routineId, sessionDateISO, scope, createdAtISO',
+      workoutLogs: '&id, completedAt, routineId, status',
+      exerciseLogEntries: '&id, workoutLogId, exerciseId, equipmentKey',
+      personalExerciseDefaults: '&id, exerciseId, equipmentKey, updatedAt, source',
+      exerciseMedia: '&id, exerciseId, type, isOfflineCapable, isTrusted',
+      tourRoadmaps: '&id',
+      settings: '&id',
+      equipment: '&id, owned, recommended',
+      schedulePreferences: '&id',
+      carbEntries: '&id, dateISO, mealSlot, createdAt, sourceType',
+      carbSettings: '&id',
+      carbGoalHistory: '&id, effectiveDateISO',
+      carbPresets: '&id, name, lastUsedAt, useCount',
+      foodLookupCache: '&id, source, queryOrSourceId, expiresAt',
+      privateSettings: '&key, updatedAt',
+    })
   }
 }
 
-export const db = new RampRepDatabase()
+export const db = new RAMprepDatabase()
