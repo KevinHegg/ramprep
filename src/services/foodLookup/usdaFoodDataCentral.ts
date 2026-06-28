@@ -101,6 +101,55 @@ const servingLabelForFood = (food: UsdaFood) => {
   return undefined
 }
 
+const normalizeWords = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+const brandedQueryWords = /\b(quest|atkins|ratio|keto|bar|bagel|bread|cereal|marmalade|yogurt|protein|chips|cookie|cracker|restaurant|brand)\b/
+
+const preparedFoodWords = /\b(bagel|marmalade|sherbet|babyfood|baby food|sauce|dressing|restaurant|prepared|frozen|cereal|cookie|cracker|candy|juice)\b/
+
+const rawCommonWords = /\b(raw|fresh|uncooked|whole)\b/
+
+const looksPackagedOrBranded = (query: string) => {
+  const normalized = normalizeWords(query)
+  return normalized.split(' ').length > 2 || brandedQueryWords.test(normalized)
+}
+
+const candidateRankScore = (query: string, candidate: NormalizedFoodCandidate) => {
+  const normalizedQuery = normalizeWords(query)
+  const normalizedName = normalizeWords(candidate.name)
+  const dataType = normalizeWords(candidate.dataType ?? '')
+  const hasBrand = Boolean(candidate.brandName)
+  const brandedQuery = looksPackagedOrBranded(query)
+  let score = 0
+
+  if (dataType.includes('foundation')) score -= 90
+  if (dataType.includes('sr legacy')) score -= 80
+  if (dataType.includes('survey') || dataType.includes('fndds')) score -= 70
+  if (dataType.includes('branded')) score += brandedQuery ? -25 : 70
+  if (dataType.includes('restaurant')) score += brandedQuery ? 10 : 90
+  if (hasBrand) score += brandedQuery ? -15 : 35
+  if (brandedQuery) {
+    const queryTerms = normalizedQuery.split(' ').filter((term) => term.length > 2)
+    const matchedTerms = queryTerms.filter((term) => normalizedName.includes(term)).length
+    score -= matchedTerms * 35
+  }
+
+  if (new RegExp(`\\b${normalizedQuery.replaceAll(' ', '\\s+')}s?\\b`).test(normalizedName)) score -= 18
+  if (normalizedName.startsWith(normalizedQuery)) score -= 22
+  if (rawCommonWords.test(normalizedName)) score -= 35
+  if (preparedFoodWords.test(normalizedName)) score += brandedQuery ? 0 : 45
+  if (/babyfood|baby food|sherbet|marmalade/.test(normalizedName)) score += brandedQuery ? 10 : 65
+  if (!candidate.servingLabel && !candidate.servingSizeGrams) score += 8
+
+  return score
+}
+
+export const rankUsdaCandidates = (query: string, candidates: NormalizedFoodCandidate[]) =>
+  candidates
+    .map((candidate, index) => ({ candidate, index, score: candidateRankScore(query, candidate) }))
+    .sort((a, b) => a.score - b.score || a.index - b.index)
+    .map(({ candidate }) => candidate)
+
 export const formatUsdaErrorMessage = (status: number, body?: UsdaApiErrorBody, context = 'lookup') => {
   if (body?.error?.code === 'API_KEY_INVALID') {
     return 'USDA rejected this API key. Confirm or rotate it in FoodData Central, then save it again locally.'
@@ -131,6 +180,9 @@ export const parseUsdaCandidate = (food: UsdaFood): NormalizedFoodCandidate | nu
   const warnings: string[] = []
   if (!servingLabelForFood(food)) {
     warnings.push('Serving unclear; verify label.')
+  }
+  if (food.dataType?.toLowerCase().includes('branded')) {
+    warnings.push('Branded food may require label verification.')
   }
 
   return {
@@ -253,6 +305,9 @@ export const parseUsdaFoodDetail = (food: UsdaFood): NormalizedFoodDetail | null
   const fiberGrams = findNutrient(food, fiberMatcher)
   const sugarAlcoholGrams = findNutrient(food, sugarAlcoholMatcher)
   const { options, warnings } = servingOptionsForFood(food)
+  if (food.dataType?.toLowerCase().includes('branded')) {
+    warnings.push('Branded food may require label verification.')
+  }
 
   return {
     candidate,
@@ -294,9 +349,11 @@ export const searchUsdaFoods = async (query: string, options: FoodLookupOptions)
   }
   const json = (await response.json()) as { foods?: UsdaFood[] }
 
-  return (json.foods ?? [])
+  const candidates = (json.foods ?? [])
     .map((food) => parseUsdaCandidate(food))
     .filter((food): food is NormalizedFoodCandidate => Boolean(food))
+
+  return rankUsdaCandidates(trimmed, candidates)
 }
 
 export const getUsdaFoodDetails = async (

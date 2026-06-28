@@ -1073,6 +1073,8 @@ label > span,
 .lookup-results,
 .lookup-detail,
 .serving-picker,
+.selected-food-card,
+.lookup-added-card,
 .preset-list,
 .report-list {
   display: grid;
@@ -1171,6 +1173,8 @@ label > span,
 }
 
 .lookup-detail,
+.selected-food-card,
+.lookup-added-card,
 .serving-picker {
   padding: 12px;
   border: 1px solid var(--border);
@@ -1182,6 +1186,33 @@ label > span,
   margin: 0;
   color: var(--text-strong);
   font-size: 18px;
+}
+
+.selected-food-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.selected-food-card h3,
+.lookup-added-card strong {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.selected-food-card p,
+.lookup-added-card p,
+.manual-override-note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.manual-override-note {
+  margin: 0;
+  text-transform: none;
 }
 
 .serving-picker h2 {
@@ -2560,6 +2591,10 @@ label > span,
 
   .quantity-picker button {
     grid-row: 2;
+  }
+
+  .selected-food-card {
+    grid-template-columns: 1fr;
   }
 }
 

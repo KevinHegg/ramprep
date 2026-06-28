@@ -46,15 +46,13 @@ import {
 
 const nowIso = () => new Date().toISOString()
 export const USDA_API_KEY_PRIVATE_SETTING_KEY = 'usdaFoodDataCentralApiKey'
-export const NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY = 'nutritionixAppId'
-export const NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY = 'nutritionixAppKey'
 
 type LegacyCarbSettings = CarbSettings & {
   foodDataCentralApiKey?: string
-  preferredNutritionSource?: CarbSettings['preferredNutritionSource'] | 'openFoodFacts' | 'nutritionix'
+  preferredNutritionSource?: CarbSettings['preferredNutritionSource'] | 'openFoodFacts'
 }
 
-const nutritionSources: CarbSettings['preferredNutritionSource'][] = ['manual', 'usda', 'nutritionix', 'openFoodFacts']
+const nutritionSources: CarbSettings['preferredNutritionSource'][] = ['manual', 'usda', 'openFoodFacts']
 
 const sanitizeCarbSettings = (settings: LegacyCarbSettings): CarbSettings => ({
   id: 'default',

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type RefObject } from 'react'
 import { calculateServingNetCarbs } from '../services/foodLookup/netCarbCalculator'
 import type { NetCarbCalculation, NormalizedFoodDetail, ServingOption } from '../services/foodLookup/types'
 import { normalizeCarbGrams } from '../utils/carbs'
@@ -16,7 +16,9 @@ export interface ServingPickerSubmission {
 interface ServingPickerProps {
   detail: NormalizedFoodDetail
   mealLabel: string
+  formulaRef?: RefObject<HTMLDivElement | null>
   subtractSugarAlcoholsWhenAvailable: boolean
+  onFormulaChange?: () => void
   onAdd: (submission: ServingPickerSubmission) => void
   onSavePreset: (submission: ServingPickerSubmission) => void
   onCancel: () => void
@@ -39,7 +41,9 @@ const optionLabel = (option: ServingOption) => {
 export function ServingPicker({
   detail,
   mealLabel,
+  formulaRef,
   subtractSugarAlcoholsWhenAvailable,
+  onFormulaChange,
   onAdd,
   onSavePreset,
   onCancel,
@@ -102,8 +106,13 @@ export function ServingPicker({
     }
   }
 
+  const nudgeFormula = () => {
+    window.setTimeout(() => onFormulaChange?.(), 0)
+  }
+
   const adjustQuantity = (delta: number) => {
     setQuantity((value) => Math.max(0, Math.round((numberOrZero(value) + delta) * 10) / 10))
+    nudgeFormula()
   }
 
   return (
@@ -125,7 +134,10 @@ export function ServingPicker({
             className={selectedServingId === option.id ? 'active' : ''}
             key={option.id}
             type="button"
-            onClick={() => setSelectedServingId(option.id)}
+            onClick={() => {
+              setSelectedServingId(option.id)
+              nudgeFormula()
+            }}
           >
             <span>{optionLabel(option)}</span>
             <small>{option.source === 'custom' ? 'enter grams' : option.source}</small>
@@ -141,7 +153,10 @@ export function ServingPicker({
             min={0}
             type="number"
             value={customGrams}
-            onChange={(event) => setCustomGrams(Math.max(0, Number(event.target.value)))}
+            onChange={(event) => {
+              setCustomGrams(Math.max(0, Number(event.target.value)))
+              nudgeFormula()
+            }}
           />
         </label>
       )}
@@ -156,7 +171,10 @@ export function ServingPicker({
             min={0}
             type="number"
             value={quantity}
-            onChange={(event) => setQuantity(Math.max(0, Number(event.target.value)))}
+            onChange={(event) => {
+              setQuantity(Math.max(0, Number(event.target.value)))
+              nudgeFormula()
+            }}
           />
         </label>
         <button type="button" onClick={() => adjustQuantity(0.5)}>+0.5</button>
@@ -164,7 +182,7 @@ export function ServingPicker({
       </div>
 
       {calculation && (
-        <div className="formula-card">
+        <div className="formula-card" ref={formulaRef} tabIndex={-1}>
           <p>{calculation.formulaLabel}</p>
           <strong>Add {finalNetCarbs}g net carbs</strong>
           {calculation.warnings.map((warning) => (
@@ -183,6 +201,7 @@ export function ServingPicker({
           value={manualOverride}
           onChange={(event) => setManualOverride(event.target.value)}
         />
+        {overrideNumber !== undefined && <span className="manual-override-note">Using manual value.</span>}
       </label>
 
       <div className="button-grid">
@@ -196,7 +215,7 @@ export function ServingPicker({
             }
           }}
         >
-          Add to {mealLabel}
+          Add {finalNetCarbs}g to {mealLabel}
         </button>
         <button
           className="ghost-button"

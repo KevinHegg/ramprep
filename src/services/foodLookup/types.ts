@@ -1,4 +1,4 @@
-export type FoodLookupSource = 'usda' | 'nutritionix' | 'openFoodFacts' | 'manual'
+export type FoodLookupSource = 'usda' | 'openFoodFacts' | 'manual'
 
 export type LookupSearchSource = Exclude<FoodLookupSource, 'manual'>
 
@@ -63,8 +63,6 @@ export interface NetCarbCalculation {
 
 export interface FoodLookupOptions {
   apiKey?: string
-  appId?: string
-  appKey?: string
   subtractSugarAlcoholsWhenAvailable?: boolean
   signal?: AbortSignal
 }

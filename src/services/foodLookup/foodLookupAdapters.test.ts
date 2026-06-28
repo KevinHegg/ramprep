@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { calculateServingNetCarbs } from './netCarbCalculator'
-import { parseNutritionixFood } from './nutritionix'
 import { parseOpenFoodFactsProduct } from './openFoodFacts'
-import { formatUsdaErrorMessage, parseUsdaCandidate, parseUsdaFoodDetail } from './usdaFoodDataCentral'
+import { formatUsdaErrorMessage, parseUsdaCandidate, parseUsdaFoodDetail, rankUsdaCandidates } from './usdaFoodDataCentral'
 
 describe('food lookup adapters', () => {
   it('parses USDA search rows as candidates only', () => {
@@ -92,6 +91,39 @@ describe('food lookup adapters', () => {
     ).toBe(9)
   })
 
+  it('ranks raw/common USDA foods above branded matches for generic searches', () => {
+    const candidates = [
+      parseUsdaCandidate({ fdcId: 1, description: 'ONION BAGEL', dataType: 'Branded', brandOwner: 'Bagel Co' })!,
+      parseUsdaCandidate({ fdcId: 2, description: 'Onions, raw', dataType: 'Foundation', foodPortions: [{ gramWeight: 110 }] })!,
+      parseUsdaCandidate({ fdcId: 3, description: 'Onion rings, prepared', dataType: 'Survey (FNDDS)' })!,
+    ]
+
+    expect(rankUsdaCandidates('onion', candidates).map((candidate) => candidate.name)).toEqual([
+      'Onions, raw',
+      'Onion rings, prepared',
+      'ONION BAGEL',
+    ])
+  })
+
+  it('ranks raw orange above marmalade and sherbet for generic orange search', () => {
+    const candidates = [
+      parseUsdaCandidate({ fdcId: 1, description: 'Orange sherbet', dataType: 'Survey (FNDDS)' })!,
+      parseUsdaCandidate({ fdcId: 2, description: 'Orange marmalade', dataType: 'Branded', brandOwner: 'Jar Co' })!,
+      parseUsdaCandidate({ fdcId: 3, description: 'Orange, raw', dataType: 'SR Legacy', foodPortions: [{ gramWeight: 131 }] })!,
+    ]
+
+    expect(rankUsdaCandidates('orange', candidates)[0].name).toBe('Orange, raw')
+  })
+
+  it('allows branded foods to rise for branded-style queries', () => {
+    const candidates = [
+      parseUsdaCandidate({ fdcId: 1, description: 'Quest chocolate protein bar', dataType: 'Branded', brandOwner: 'Quest' })!,
+      parseUsdaCandidate({ fdcId: 2, description: 'Chocolate, dark', dataType: 'Foundation' })!,
+    ]
+
+    expect(rankUsdaCandidates('Quest bar', candidates)[0].name).toBe('Quest chocolate protein bar')
+  })
+
   it('subtracts USDA sugar alcohols only when the setting is on and explicit', () => {
     const detail = parseUsdaFoodDetail({
       fdcId: 789,
@@ -116,26 +148,6 @@ describe('food lookup adapters', () => {
         subtractSugarAlcoholsWhenAvailable: true,
       }).netCarbsRounded,
     ).toBe(3)
-  })
-
-  it('parses Nutritionix serving and alternate-measure gram math', () => {
-    const detail = parseNutritionixFood({
-      food_name: 'orange',
-      serving_qty: 1,
-      serving_unit: 'cup sections',
-      serving_weight_grams: 180,
-      nf_total_carbohydrate: 21,
-      nf_dietary_fiber: 4.3,
-      alt_measures: [{ seq: 1, qty: 1, measure: 'medium', serving_weight: 131 }],
-    })!
-
-    expect(detail.candidate).toMatchObject({
-      source: 'nutritionix',
-      servingLabel: '1 cup sections (180g)',
-    })
-    const medium = detail.servingOptions.find((option) => option.id === 'alt-1')!
-    const calculation = calculateServingNetCarbs({ detail, selectedServing: medium, quantity: 1 })
-    expect(calculation.netCarbsRounded).toBe(12)
   })
 
   it('parses Open Food Facts packaged serving and warning', () => {

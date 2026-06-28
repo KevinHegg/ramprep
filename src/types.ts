@@ -45,8 +45,8 @@ export type CarbMealSlot =
   | 'afternoonSnack'
   | 'dinner'
   | 'eveningSnack'
-export type CarbSourceType = 'manual' | 'preset' | 'usda' | 'nutritionix' | 'openFoodFacts'
-export type PreferredNutritionSource = 'manual' | 'usda' | 'nutritionix' | 'openFoodFacts'
+export type CarbSourceType = 'manual' | 'preset' | 'usda' | 'openFoodFacts'
+export type PreferredNutritionSource = 'manual' | 'usda' | 'openFoodFacts'
 
 export interface ExerciseDefaults {
   sets?: number
@@ -280,7 +280,7 @@ export interface CarbPreset {
 
 export interface FoodLookupCache {
   id: ID
-  source: 'usda' | 'nutritionix' | 'openFoodFacts'
+  source: 'usda' | 'openFoodFacts'
   queryOrSourceId: string
   resultJson: string
   cachedAt: string
