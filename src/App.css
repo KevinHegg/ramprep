@@ -1072,6 +1072,7 @@ label > span,
 .meal-section-list,
 .lookup-results,
 .lookup-detail,
+.serving-picker,
 .preset-list,
 .report-list {
   display: grid;
@@ -1164,10 +1165,13 @@ label > span,
 
 .lookup-results b {
   flex: 0 0 auto;
-  white-space: nowrap;
+  min-width: 0;
+  text-align: right;
+  white-space: normal;
 }
 
-.lookup-detail {
+.lookup-detail,
+.serving-picker {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1178,6 +1182,107 @@ label > span,
   margin: 0;
   color: var(--text-strong);
   font-size: 18px;
+}
+
+.serving-picker h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 24px;
+  line-height: 1.05;
+}
+
+.serving-option-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.serving-option-grid button,
+.quantity-picker button {
+  min-width: 0;
+  min-height: var(--touch-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-strong);
+  background: var(--surface);
+  font-weight: 900;
+}
+
+.serving-option-grid button {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 10px;
+  text-align: left;
+}
+
+.serving-option-grid button.active {
+  border-color: var(--accent);
+  color: white;
+  background: var(--accent);
+}
+
+.serving-option-grid small {
+  color: inherit;
+  font-size: 11px;
+  opacity: .75;
+}
+
+.quantity-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(92px, 1.2fr) repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+
+.quantity-picker label,
+.serving-input {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.quantity-picker label {
+  min-width: 0;
+}
+
+.quantity-picker input,
+.serving-input input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--touch-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--text-strong);
+  background: var(--surface);
+  font-size: 20px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.formula-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.formula-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.formula-card strong {
+  color: var(--text-strong);
+  font-size: 28px;
+  line-height: 1.05;
 }
 
 .report-tile {
@@ -2438,6 +2543,23 @@ label > span,
   .carb-integer-picker button {
     grid-row: 2;
     min-width: 0;
+  }
+
+  .serving-option-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .quantity-picker {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .quantity-picker label {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+
+  .quantity-picker button {
+    grid-row: 2;
   }
 }
 

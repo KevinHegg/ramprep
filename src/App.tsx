@@ -32,6 +32,7 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
+import { ServingPicker, type ServingPickerSubmission } from './components/ServingPicker'
 import {
   addExerciseToRoutine,
   clearFoodLookupCache,
@@ -71,6 +72,8 @@ import {
   saveRoadmap,
   saveSchedule,
   saveSettings,
+  NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY,
+  NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY,
   USDA_API_KEY_PRIVATE_SETTING_KEY,
   updateCarbEntry,
   updateWorkoutLog,
@@ -144,8 +147,10 @@ import {
   totalCarbsByMeal,
 } from './utils/carbs'
 import { validateGoogleAppsScriptUrl } from './services/googleSheetsSync'
+import { searchNutritionixFoods } from './services/foodLookup/nutritionix'
+import { searchOpenFoodFactsProducts } from './services/foodLookup/openFoodFacts'
 import { getUsdaFoodDetails, searchUsdaFoods } from './services/foodLookup/usdaFoodDataCentral'
-import type { FoodLookupResult } from './services/foodLookup/types'
+import type { LookupSearchSource, NormalizedFoodCandidate, NormalizedFoodDetail } from './services/foodLookup/types'
 import type {
   AppData,
   BikeTourPurpose,
@@ -171,6 +176,11 @@ type Page = 'dashboard' | 'train' | 'ride' | 'workouts' | 'log' | 'carbs' | 'pro
 type WorkoutsTab = 'routines' | 'library'
 type LogMode = 'recommended' | 'routine' | 'free'
 type ActiveWorkoutStage = 'workout' | 'review'
+const foodLookupSourceLabels: Record<LookupSearchSource, string> = {
+  usda: 'USDA FoodData Central',
+  nutritionix: 'Nutritionix',
+  openFoodFacts: 'Packaged / Open Food Facts',
+}
 interface ActiveWorkoutState {
   stage: ActiveWorkoutStage
   currentIndex: number
@@ -1121,10 +1131,12 @@ function App() {
   const [carbAmount, setCarbAmount] = useState(0)
   const [carbEditEntry, setCarbEditEntry] = useState<CarbEntry | null>(null)
   const [presetDraft, setPresetDraft] = useState({ id: '', name: '', netCarbs: 0, servingDescription: '' })
+  const [lookupSource, setLookupSource] = useState<LookupSearchSource>('usda')
   const [lookupQuery, setLookupQuery] = useState('')
-  const [lookupResults, setLookupResults] = useState<FoodLookupResult[]>([])
-  const [lookupSelected, setLookupSelected] = useState<FoodLookupResult | null>(null)
-  const [lookupOverride, setLookupOverride] = useState<number | undefined>()
+  const [lookupBarcode, setLookupBarcode] = useState('')
+  const [lookupResults, setLookupResults] = useState<NormalizedFoodCandidate[]>([])
+  const [lookupDetailsById, setLookupDetailsById] = useState<Record<string, NormalizedFoodDetail>>({})
+  const [lookupSelected, setLookupSelected] = useState<NormalizedFoodDetail | null>(null)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState('')
   const [usdaKeyDraft, setUsdaKeyDraft] = useState('')
@@ -1132,6 +1144,12 @@ function App() {
   const [usdaTestQuery, setUsdaTestQuery] = useState('plain greek yogurt')
   const [usdaKeyBusy, setUsdaKeyBusy] = useState(false)
   const [usdaKeyStatus, setUsdaKeyStatus] = useState('')
+  const [nutritionixAppIdDraft, setNutritionixAppIdDraft] = useState('')
+  const [nutritionixAppKeyDraft, setNutritionixAppKeyDraft] = useState('')
+  const [nutritionixCredentialsSaved, setNutritionixCredentialsSaved] = useState(false)
+  const [nutritionixTestQuery, setNutritionixTestQuery] = useState('orange')
+  const [nutritionixBusy, setNutritionixBusy] = useState(false)
+  const [nutritionixStatus, setNutritionixStatus] = useState('')
   const [carbPanel, setCarbPanel] = useState<'none' | 'lookup' | 'reports' | 'presets'>('none')
   const [rideDraft, setRideDraft] = useState<RideDraftState>({
     template: 'Start ride log' as RideTemplate,
@@ -1164,14 +1182,26 @@ function App() {
   const activeWorkoutDraftRestoredRef = useRef(false)
 
   const refresh = useCallback(async () => {
-    const [snapshot, usdaPrivateSetting] = await Promise.all([
+    const [snapshot, usdaPrivateSetting, nutritionixAppIdSetting, nutritionixAppKeySetting] = await Promise.all([
       getAppData(),
       getPrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY),
+      getPrivateSetting(NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY),
+      getPrivateSetting(NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY),
     ])
     setData(snapshot)
     setSettingsDraft(snapshot.settings)
     setCarbSettingsDraft(snapshot.carbSettings)
     setUsdaKeySaved(Boolean(usdaPrivateSetting?.encryptedOrPlainValue.trim()))
+    setNutritionixCredentialsSaved(
+      Boolean(nutritionixAppIdSetting?.encryptedOrPlainValue.trim() && nutritionixAppKeySetting?.encryptedOrPlainValue.trim()),
+    )
+    if (
+      snapshot.carbSettings.preferredNutritionSource !== 'manual'
+      && (snapshot.carbSettings.preferredNutritionSource !== 'nutritionix'
+        || Boolean(nutritionixAppIdSetting?.encryptedOrPlainValue.trim() && nutritionixAppKeySetting?.encryptedOrPlainValue.trim()))
+    ) {
+      setLookupSource(snapshot.carbSettings.preferredNutritionSource)
+    }
     setScheduleDraft(snapshot.schedule)
     setLoading(false)
   }, [])
@@ -2063,6 +2093,17 @@ function App() {
   const loadUsdaApiKey = async () =>
     (await getPrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY))?.encryptedOrPlainValue.trim() ?? ''
 
+  const loadNutritionixCredentials = async () => {
+    const [appId, appKey] = await Promise.all([
+      getPrivateSetting(NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY),
+      getPrivateSetting(NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY),
+    ])
+    return {
+      appId: appId?.encryptedOrPlainValue.trim() ?? '',
+      appKey: appKey?.encryptedOrPlainValue.trim() ?? '',
+    }
+  }
+
   const handleSaveUsdaApiKey = async () => {
     const key = usdaKeyDraft.trim()
     if (!key) {
@@ -2100,11 +2141,62 @@ function App() {
         subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
       })
       setUsdaKeySaved(true)
-      setUsdaKeyStatus(results[0] ? `USDA test found ${results[0].name}: ${results[0].formula}` : 'USDA responded, but no matching foods were found.')
+      setUsdaKeyStatus(results[0] ? `USDA test found ${results[0].name}. Choose it in Food lookup to confirm serving.` : 'USDA responded, but no matching foods were found.')
     } catch (error) {
       setUsdaKeyStatus(error instanceof Error ? error.message : 'USDA test failed.')
     } finally {
       setUsdaKeyBusy(false)
+    }
+  }
+
+  const handleSaveNutritionixCredentials = async () => {
+    const appId = nutritionixAppIdDraft.trim()
+    const appKey = nutritionixAppKeyDraft.trim()
+    if (!appId || !appKey) {
+      setNutritionixStatus('Paste both Nutritionix credentials first.')
+      return
+    }
+
+    await Promise.all([
+      savePrivateSetting(NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY, appId),
+      savePrivateSetting(NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY, appKey),
+      clearFoodLookupCache(),
+    ])
+    setNutritionixAppIdDraft('')
+    setNutritionixAppKeyDraft('')
+    setNutritionixCredentialsSaved(true)
+    setNutritionixStatus('Nutritionix credentials saved locally. Cache cleared.')
+    showFlash('Nutritionix credentials saved locally.')
+  }
+
+  const handleClearNutritionixCredentials = async () => {
+    await Promise.all([
+      deletePrivateSetting(NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY),
+      deletePrivateSetting(NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY),
+      clearFoodLookupCache(),
+    ])
+    setNutritionixAppIdDraft('')
+    setNutritionixAppKeyDraft('')
+    setNutritionixCredentialsSaved(false)
+    if (lookupSource === 'nutritionix') {
+      setLookupSource('usda')
+    }
+    setNutritionixStatus('Nutritionix credentials cleared from this browser.')
+    showFlash('Nutritionix credentials cleared.')
+  }
+
+  const handleTestNutritionixLookup = async () => {
+    setNutritionixBusy(true)
+    setNutritionixStatus('')
+    try {
+      const credentials = await loadNutritionixCredentials()
+      const results = await searchNutritionixFoods(nutritionixTestQuery || 'orange', credentials)
+      setNutritionixCredentialsSaved(true)
+      setNutritionixStatus(results[0] ? `Nutritionix test found ${results[0].candidate.name}. Serving picker is available.` : 'Nutritionix responded, but no matching foods were found.')
+    } catch (error) {
+      setNutritionixStatus(error instanceof Error ? error.message : 'Nutritionix test failed.')
+    } finally {
+      setNutritionixBusy(false)
     }
   }
 
@@ -2128,6 +2220,12 @@ function App() {
   }
 
   const handleUsePreset = async (preset: AppData['carbPresets'][number]) => {
+    const confirmed = window.confirm(`Add ${preset.netCarbs}g to ${carbMealSlotLabels[carbMealSlot]}?`)
+    if (!confirmed) {
+      setCarbAmount(preset.netCarbs)
+      return
+    }
+
     await addCarbEntry({
       netCarbs: preset.netCarbs,
       sourceType: 'preset',
@@ -2140,28 +2238,62 @@ function App() {
   }
 
   const handleLookupSearch = async () => {
-    if (!lookupQuery.trim() || !carbSettingsDraft) {
+    if ((!lookupQuery.trim() && !(lookupSource === 'openFoodFacts' && lookupBarcode.trim())) || !carbSettingsDraft) {
       return
     }
 
     setLookupLoading(true)
     setLookupError('')
     setLookupSelected(null)
+    setLookupDetailsById({})
     try {
-      const cached = await getFoodLookupCache('usda', lookupQuery)
+      const cacheKey = lookupSource === 'openFoodFacts' && lookupBarcode.trim()
+        ? `barcode:${lookupBarcode.trim()}`
+        : lookupQuery.trim()
+      const cached = await getFoodLookupCache(lookupSource, cacheKey)
       if (cached) {
-        setLookupResults(JSON.parse(cached.resultJson) as FoodLookupResult[])
+        if (lookupSource === 'usda') {
+          setLookupResults(JSON.parse(cached.resultJson) as NormalizedFoodCandidate[])
+        } else {
+          const details = JSON.parse(cached.resultJson) as NormalizedFoodDetail[]
+          setLookupResults(details.map((detail) => detail.candidate))
+          setLookupDetailsById(Object.fromEntries(details.map((detail) => [detail.candidate.id, detail])))
+        }
         return
       }
 
-      const options = {
-        apiKey: await loadUsdaApiKey(),
-        subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
+      if (lookupSource === 'usda') {
+        const results = await searchUsdaFoods(lookupQuery, {
+          apiKey: await loadUsdaApiKey(),
+          subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
+        })
+        setLookupResults(results)
+        await saveFoodLookupCache('usda', cacheKey, JSON.stringify(results))
+        if (!results.length) {
+          setLookupError('No lookup results found. Manual entry still works.')
+        }
+        return
       }
-      const results = await searchUsdaFoods(lookupQuery, options)
-      setLookupResults(results)
-      await saveFoodLookupCache('usda', lookupQuery, JSON.stringify(results))
-      if (!results.length) {
+
+      if (lookupSource === 'nutritionix') {
+        const details = await searchNutritionixFoods(lookupQuery, await loadNutritionixCredentials())
+        setLookupResults(details.map((detail) => detail.candidate))
+        setLookupDetailsById(Object.fromEntries(details.map((detail) => [detail.candidate.id, detail])))
+        await saveFoodLookupCache('nutritionix', cacheKey, JSON.stringify(details))
+        if (!details.length) {
+          setLookupError('No lookup results found. Manual entry still works.')
+        }
+        return
+      }
+
+      const details = await searchOpenFoodFactsProducts({
+        query: lookupQuery,
+        barcode: lookupBarcode,
+      })
+      setLookupResults(details.map((detail) => detail.candidate))
+      setLookupDetailsById(Object.fromEntries(details.map((detail) => [detail.candidate.id, detail])))
+      await saveFoodLookupCache('openFoodFacts', cacheKey, JSON.stringify(details))
+      if (!details.length) {
         setLookupError('No lookup results found. Manual entry still works.')
       }
     } catch (error) {
@@ -2173,56 +2305,55 @@ function App() {
     }
   }
 
-  const handleSelectLookupResult = async (result: FoodLookupResult) => {
+  const handleSelectLookupResult = async (result: NormalizedFoodCandidate) => {
     setLookupError('')
     setLookupLoading(true)
     try {
       const detailed =
         result.source === 'usda' && carbSettingsDraft
-          ? (await getUsdaFoodDetails(result.sourceId, {
+          ? await getUsdaFoodDetails(result.sourceId, {
               apiKey: await loadUsdaApiKey(),
               subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
-            })) ?? result
-          : result
+            })
+          : lookupDetailsById[result.id]
+      if (!detailed) {
+        throw new Error('Food detail was not available. Search again or use manual entry.')
+      }
       setLookupSelected(detailed)
-      setLookupOverride(detailed.netCarbs)
-      setCarbAmount(normalizeCarbGrams(detailed.netCarbs))
-      showFlash(`Quick add set to ${detailed.netCarbs} net carbs.`)
-    } catch {
-      setLookupSelected(result)
-      setLookupOverride(result.netCarbs)
-      setCarbAmount(normalizeCarbGrams(result.netCarbs))
-      showFlash(`Quick add set to ${result.netCarbs} net carbs.`)
+      showFlash('Choose serving before adding net carbs.')
+    } catch (error) {
+      setLookupSelected(null)
+      setLookupError(error instanceof Error ? error.message : 'Unable to open serving picker.')
     } finally {
       setLookupLoading(false)
     }
   }
 
-  const handleAddLookupCarbs = async () => {
-    if (!lookupSelected) {
-      return
-    }
-
+  const handleAddLookupCarbs = async (submission: ServingPickerSubmission) => {
+    const sourceType = submission.overrideUsed ? 'manual' : submission.detail.candidate.source
     await addCarbEntry({
-      netCarbs: lookupOverride ?? lookupSelected.netCarbs,
-      sourceType: lookupSelected.sourceType,
-      sourceLabel: lookupSelected.attribution,
-      savedFoodName: lookupSelected.name,
+      netCarbs: submission.netCarbs,
+      sourceType,
+      sourceLabel: submission.overrideUsed
+        ? `${submission.detail.attributionText} manual override`
+        : submission.detail.attributionText,
+      savedFoodName: submission.detail.candidate.name,
     })
+    setCarbAmount(submission.netCarbs)
+    setLookupSelected(null)
     showFlash('Lookup net carbs added.', true)
   }
 
-  const handleSaveLookupPreset = async () => {
-    if (!lookupSelected) {
-      return
-    }
-
+  const handleSaveLookupPreset = async (submission: ServingPickerSubmission) => {
     await saveCarbPreset({
-      name: lookupSelected.name,
-      netCarbs: lookupOverride ?? lookupSelected.netCarbs,
-      servingDescription: lookupSelected.servingSize,
-      sourceType: lookupSelected.sourceType,
-      sourceId: lookupSelected.sourceId,
+      name: submission.detail.candidate.name,
+      netCarbs: submission.netCarbs,
+      servingDescription: submission.servingLabel,
+      servingGrams: submission.servingGrams,
+      quantity: submission.quantity,
+      formulaText: submission.overrideUsed ? `${submission.calculation.formulaLabel} (manual override ${submission.netCarbs}g)` : submission.calculation.formulaLabel,
+      sourceType: submission.overrideUsed ? 'manual' : submission.detail.candidate.source,
+      sourceId: submission.detail.candidate.sourceId,
     })
     await refresh()
     showFlash('Lookup saved as preset.')
@@ -2257,7 +2388,7 @@ function App() {
   const selectedDayGoal = goalForDate(carbSelectedDate, data.carbGoalHistory, data.carbSettings)
   const selectedDayStatus = carbStatusText(selectedDayTotal, selectedDayGoal)
   const recentPresets = sortedCarbPresets(data.carbPresets)
-  const lookupSourceLabel = 'USDA FoodData Central'
+  const lookupSourceLabel = foodLookupSourceLabels[lookupSource]
   const routineById = new Map(routines.map((routine) => [routine.id, routine]))
   const completedLogs = logs.filter((log) => log.status === 'completed')
   const strengthSessions = completedLogs.filter((log) => routineById.get(log.routineId ?? '')?.type === 'strength').length
@@ -4368,15 +4499,45 @@ function App() {
             </div>
             <div className="form-grid">
               <label>
-                Search
+                Source
+                <select
+                  value={lookupSource}
+                  onChange={(event) => {
+                    setLookupSource(event.target.value as LookupSearchSource)
+                    setLookupResults([])
+                    setLookupDetailsById({})
+                    setLookupSelected(null)
+                    setLookupError('')
+                  }}
+                >
+                  <option value="usda">USDA</option>
+                  {nutritionixCredentialsSaved && <option value="nutritionix">Nutritionix</option>}
+                  <option value="openFoodFacts">Packaged / Open Food Facts</option>
+                </select>
+              </label>
+              <label>
+                {lookupSource === 'nutritionix' ? 'Natural search' : lookupSource === 'openFoodFacts' ? 'Product search' : 'Search'}
                 <input
                   value={lookupQuery}
                   onChange={(event) => setLookupQuery(event.target.value)}
-                  placeholder="food or branded item"
+                  placeholder={lookupSource === 'nutritionix' ? 'orange or 1 medium orange' : lookupSource === 'openFoodFacts' ? 'packaged item name' : 'food or branded item'}
                 />
               </label>
+              {lookupSource === 'openFoodFacts' && (
+                <label>
+                  Barcode
+                  <input
+                    inputMode="numeric"
+                    value={lookupBarcode}
+                    onChange={(event) => setLookupBarcode(event.target.value)}
+                    placeholder="scan or type barcode"
+                  />
+                </label>
+              )}
             </div>
-            {!usdaKeySaved && <p className="notice">Add your USDA key in Net Carb Settings before lookup. Manual net-carb entry still works.</p>}
+            {lookupSource === 'usda' && !usdaKeySaved && <p className="notice">Add your USDA key in Net Carb Settings before lookup. Manual net-carb entry still works.</p>}
+            {lookupSource === 'nutritionix' && !nutritionixCredentialsSaved && <p className="notice">Add Nutritionix credentials in Net Carb Settings before lookup. Manual net-carb entry still works.</p>}
+            {lookupSource === 'openFoodFacts' && <p className="notice">Open Food Facts is crowdsourced; verify the package label. Search runs only when you tap Search.</p>}
             <button className="ghost-button" type="button" disabled={lookupLoading} onClick={() => void handleLookupSearch()}>
               <Search aria-hidden="true" size={18} />
               Search
@@ -4389,48 +4550,26 @@ function App() {
                     <span>
                       <strong>{result.name}</strong>
                       <small>
-                        {result.brand ? `${result.brand} · ` : ''}
-                        {result.servingSize ?? 'serving unclear'}
+                        {result.brandName ? `${result.brandName} · ` : ''}
+                        {result.dataType ? `${result.dataType} · ` : ''}
+                        {result.servingLabel ? `${result.servingLabel}` : 'Needs serving'}
                       </small>
                     </span>
-                    <b>{result.netCarbs} net carbs</b>
+                    <b>Choose serving</b>
                   </button>
                 ))}
               </div>
             ) : null}
             {lookupSelected && (
-              <div className="lookup-detail">
-                <div>
-                  <p className="eyebrow">{lookupSelected.attribution}</p>
-                  <h3>{lookupSelected.name}</h3>
-                  <p>{lookupSelected.formula}</p>
-                  <p>
-                    {lookupSelected.servingSize ?? 'Serving unclear'}
-                    {lookupSelected.brand ? ` · ${lookupSelected.brand}` : ''}
-                  </p>
-                  {lookupSelected.servingWarning && <p className="notice">{lookupSelected.servingWarning}</p>}
-                </div>
-                <NumberStepper
-                  label="Manual override"
-                  value={lookupOverride}
-                  min={0}
-                  max={300}
-                  suffix="g"
-                  quickOptions={carbQuickPicks}
-                  quickIncrements={[1, 5, 10]}
-                  onChange={(value) => setLookupOverride(normalizeCarbGrams(value))}
-                />
-                <div className="button-grid">
-                  <button className="ghost-button" type="button" onClick={() => void handleAddLookupCarbs()}>
-                    <Plus aria-hidden="true" size={18} />
-                    Add to meal
-                  </button>
-                  <button className="ghost-button" type="button" onClick={() => void handleSaveLookupPreset()}>
-                    <Save aria-hidden="true" size={18} />
-                    Save preset
-                  </button>
-                </div>
-              </div>
+              <ServingPicker
+                detail={lookupSelected}
+                key={lookupSelected.candidate.id}
+                mealLabel={carbMealSlotLabels[carbMealSlot]}
+                subtractSugarAlcoholsWhenAvailable={carbSettingsDraft.subtractSugarAlcoholsWhenAvailable}
+                onAdd={(submission) => void handleAddLookupCarbs(submission)}
+                onCancel={() => setLookupSelected(null)}
+                onSavePreset={(submission) => void handleSaveLookupPreset(submission)}
+              />
             )}
           </Card>}
 
@@ -5027,6 +5166,8 @@ function App() {
                 >
                   <option value="manual">manual</option>
                   <option value="usda">USDA</option>
+                  <option value="nutritionix">Nutritionix</option>
+                  <option value="openFoodFacts">Packaged / Open Food Facts</option>
                 </select>
               </label>
               <label>
@@ -5043,10 +5184,35 @@ function App() {
                 USDA test query
                 <input value={usdaTestQuery} onChange={(event) => setUsdaTestQuery(event.target.value)} placeholder="plain greek yogurt" />
               </label>
+              <label>
+                Nutritionix App ID
+                <input
+                  type="password"
+                  value={nutritionixAppIdDraft}
+                  onChange={(event) => setNutritionixAppIdDraft(event.target.value)}
+                  placeholder={nutritionixCredentialsSaved ? 'saved locally; paste to replace' : 'paste App ID'}
+                  autoComplete="off"
+                />
+              </label>
+              <label>
+                Nutritionix App Key
+                <input
+                  type="password"
+                  value={nutritionixAppKeyDraft}
+                  onChange={(event) => setNutritionixAppKeyDraft(event.target.value)}
+                  placeholder={nutritionixCredentialsSaved ? 'saved locally; paste to replace' : 'paste App Key'}
+                  autoComplete="off"
+                />
+              </label>
+              <label>
+                Nutritionix test query
+                <input value={nutritionixTestQuery} onChange={(event) => setNutritionixTestQuery(event.target.value)} placeholder="orange" />
+              </label>
             </div>
             <p className="notice">
-              Manual entry works offline. USDA key saved locally: {usdaKeySaved ? 'yes' : 'no'}. The key is not included in JSON export.
+              Manual entry works offline. USDA key saved locally: {usdaKeySaved ? 'yes' : 'no'}. Nutritionix saved locally: {nutritionixCredentialsSaved ? 'yes' : 'no'}. Keys are not included in JSON export.
               {usdaKeyStatus ? ` ${usdaKeyStatus}` : ''}
+              {nutritionixStatus ? ` ${nutritionixStatus}` : ''}
             </p>
             <div className="button-grid">
               <button className="ghost-button" type="button" onClick={() => void handleSaveCarbSettings()}>
@@ -5064,6 +5230,18 @@ function App() {
               <button className="ghost-button" type="button" disabled={!usdaKeySaved} onClick={() => void handleClearUsdaApiKey()}>
                 <Trash2 aria-hidden="true" size={18} />
                 Clear USDA key
+              </button>
+              <button className="ghost-button" type="button" onClick={() => void handleSaveNutritionixCredentials()}>
+                <Save aria-hidden="true" size={18} />
+                Save Nutritionix
+              </button>
+              <button className="ghost-button" type="button" disabled={nutritionixBusy || !nutritionixCredentialsSaved} onClick={() => void handleTestNutritionixLookup()}>
+                <Search aria-hidden="true" size={18} />
+                Test Nutritionix
+              </button>
+              <button className="ghost-button" type="button" disabled={!nutritionixCredentialsSaved} onClick={() => void handleClearNutritionixCredentials()}>
+                <Trash2 aria-hidden="true" size={18} />
+                Clear Nutritionix
               </button>
               <button
                 className="ghost-button"

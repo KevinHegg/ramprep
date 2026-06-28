@@ -1,5 +1,4 @@
-import { calculateNetCarbs } from './netCarbCalculator'
-import { FoodLookupError, type FoodLookupOptions, type FoodLookupResult } from './types'
+import { FoodLookupError, type FoodLookupOptions, type NormalizedFoodCandidate, type NormalizedFoodDetail, type ServingOption } from './types'
 
 const USDA_BASE_URL = 'https://api.nal.usda.gov/fdc/v1'
 
@@ -9,10 +8,25 @@ type UsdaNutrient = {
   nutrientNumber?: string
   value?: number
   amount?: number
+  unitName?: string
   nutrient?: {
     id?: number
     name?: string
     number?: string
+    unitName?: string
+  }
+}
+
+type UsdaFoodPortion = {
+  id?: number
+  amount?: number
+  modifier?: string
+  portionDescription?: string
+  gramWeight?: number
+  measureUnit?: {
+    id?: number
+    name?: string
+    abbreviation?: string
   }
 }
 
@@ -21,10 +35,13 @@ type UsdaFood = {
   description?: string
   brandOwner?: string
   brandName?: string
+  dataType?: string
+  foodCategory?: string
   servingSize?: number
   servingSizeUnit?: string
   householdServingFullText?: string
   foodNutrients?: UsdaNutrient[]
+  foodPortions?: UsdaFoodPortion[]
 }
 
 type UsdaApiErrorBody = {
@@ -36,6 +53,8 @@ type UsdaApiErrorBody = {
 
 const numberValue = (value?: number) => (Number.isFinite(value ?? NaN) ? Number(value) : undefined)
 
+const cleanText = (value?: string) => value?.replace(/\s+/g, ' ').trim()
+
 const nutrientName = (nutrient: UsdaNutrient) =>
   [nutrient.nutrientName, nutrient.nutrient?.name, nutrient.nutrientNumber, nutrient.nutrient?.number]
     .filter(Boolean)
@@ -44,14 +63,37 @@ const nutrientName = (nutrient: UsdaNutrient) =>
 
 const nutrientId = (nutrient: UsdaNutrient) => nutrient.nutrientId ?? nutrient.nutrient?.id
 
+const nutrientNumber = (nutrient: UsdaNutrient) => nutrient.nutrientNumber ?? nutrient.nutrient?.number
+
 const findNutrient = (food: UsdaFood, matcher: (nutrient: UsdaNutrient) => boolean) => {
   const nutrient = food.foodNutrients?.find(matcher)
   return numberValue(nutrient?.value ?? nutrient?.amount)
 }
 
-const servingSizeForFood = (food: UsdaFood) => {
-  if (food.householdServingFullText) {
-    return food.householdServingFullText
+const gramsFromServingSize = (servingSize?: number, unit?: string) => {
+  const value = numberValue(servingSize)
+  if (!value || !unit) {
+    return undefined
+  }
+
+  const normalized = unit.trim().toLowerCase()
+  if (['g', 'gram', 'grams'].includes(normalized)) {
+    return value
+  }
+  if (['oz', 'ounce', 'ounces'].includes(normalized)) {
+    return value * 28.349523125
+  }
+  if (['ml', 'milliliter', 'milliliters'].includes(normalized)) {
+    return value
+  }
+
+  return undefined
+}
+
+const servingLabelForFood = (food: UsdaFood) => {
+  const household = cleanText(food.householdServingFullText)
+  if (household) {
+    return household
   }
   if (food.servingSize && food.servingSizeUnit) {
     return `${food.servingSize}${food.servingSizeUnit}`
@@ -80,53 +122,159 @@ const usdaErrorMessage = async (response: Response, context: string) => {
   }
 }
 
-export const parseUsdaFood = (
-  food: UsdaFood,
-  options: Pick<FoodLookupOptions, 'subtractSugarAlcoholsWhenAvailable'> = {},
-): FoodLookupResult | null => {
+export const parseUsdaCandidate = (food: UsdaFood): NormalizedFoodCandidate | null => {
   if (!food.fdcId || !food.description) {
     return null
   }
 
-  const totalCarbohydrateGrams = findNutrient(
-    food,
-    (nutrient) => nutrientId(nutrient) === 1005 || /carbohydrate/.test(nutrientName(nutrient)),
-  )
-  const dietaryFiberGrams = findNutrient(
-    food,
-    (nutrient) => nutrientId(nutrient) === 1079 || /fiber|fibre/.test(nutrientName(nutrient)),
-  )
-  const sugarAlcoholGrams = findNutrient(
-    food,
-    (nutrient) => nutrientId(nutrient) === 1086 || /sugar alcohol|polyol/.test(nutrientName(nutrient)),
-  )
-  const calculation = calculateNetCarbs({
-    totalCarbohydrateGrams,
-    dietaryFiberGrams,
-    sugarAlcoholGrams,
-    subtractSugarAlcoholsWhenAvailable: options.subtractSugarAlcoholsWhenAvailable,
-  })
-  const servingSize = servingSizeForFood(food)
+  const servingSizeGrams = gramsFromServingSize(food.servingSize, food.servingSizeUnit)
+  const warnings: string[] = []
+  if (!servingLabelForFood(food)) {
+    warnings.push('Serving unclear; verify label.')
+  }
 
   return {
     id: `usda-${food.fdcId}`,
     source: 'usda',
-    sourceType: 'usda',
     sourceId: String(food.fdcId),
     name: food.description,
-    brand: food.brandOwner ?? food.brandName,
-    servingSize,
-    totalCarbohydrateGrams,
-    dietaryFiberGrams,
-    sugarAlcoholGrams,
-    netCarbs: calculation.netCarbs,
-    formula: calculation.formula,
-    servingWarning: servingSize ? undefined : 'Serving data may be ambiguous. Verify the label or serving before adding.',
-    attribution: 'USDA FoodData Central',
+    brandName: food.brandOwner ?? food.brandName,
+    dataType: food.dataType ?? food.foodCategory,
+    servingLabel: servingLabelForFood(food),
+    servingSizeGrams,
+    hasDetailEndpoint: true,
+    confidence: servingSizeGrams || food.foodPortions?.length ? 'high' : 'medium',
+    warnings: warnings.length ? warnings : undefined,
   }
 }
 
-export const searchUsdaFoods = async (query: string, options: FoodLookupOptions): Promise<FoodLookupResult[]> => {
+const totalCarbohydrateMatcher = (nutrient: UsdaNutrient) => {
+  const name = nutrientName(nutrient)
+  const id = nutrientId(nutrient)
+  const number = nutrientNumber(nutrient)
+  return id === 1005 || number === '205' || number === '1005' || /carbohydrate|carbs?/.test(name)
+}
+
+const fiberMatcher = (nutrient: UsdaNutrient) => {
+  const name = nutrientName(nutrient)
+  const id = nutrientId(nutrient)
+  const number = nutrientNumber(nutrient)
+  return id === 1079 || number === '291' || number === '1079' || /fiber|fibre/.test(name)
+}
+
+const sugarAlcoholMatcher = (nutrient: UsdaNutrient) => {
+  const name = nutrientName(nutrient)
+  const id = nutrientId(nutrient)
+  const number = nutrientNumber(nutrient)
+  return id === 1086 || number === '1086' || /sugar alcohol|sugar alcohols|polyol/.test(name)
+}
+
+const per100gOption = (): ServingOption => ({
+  id: 'per-100g',
+  label: '100g reference',
+  quantity: 100,
+  unit: 'g',
+  grams: 100,
+  multiplierFromBase: 1,
+  source: 'per100g',
+})
+
+const customGramsOption = (): ServingOption => ({
+  id: 'custom-grams',
+  label: 'Custom grams',
+  quantity: 100,
+  unit: 'g',
+  grams: 100,
+  source: 'custom',
+})
+
+const optionLabelWithGrams = (label: string, grams?: number) =>
+  grams ? `${label} (${Math.round(grams)}g)` : label
+
+const servingOptionsForFood = (food: UsdaFood): { options: ServingOption[]; warnings: string[] } => {
+  const options: ServingOption[] = []
+  const warnings: string[] = []
+  const servingSizeGrams = gramsFromServingSize(food.servingSize, food.servingSizeUnit)
+  const householdServing = cleanText(food.householdServingFullText)
+  const servingUnit = food.servingSizeUnit?.trim() || 'serving'
+
+  if (servingSizeGrams) {
+    options.push({
+      id: 'label-serving',
+      label: optionLabelWithGrams(householdServing || `${food.servingSize}${servingUnit}`, servingSizeGrams),
+      quantity: 1,
+      unit: householdServing || servingUnit,
+      grams: servingSizeGrams,
+      multiplierFromBase: servingSizeGrams / 100,
+      source: householdServing ? 'household' : 'label',
+      isDefault: true,
+    })
+  } else if (food.dataType?.toLowerCase().includes('branded')) {
+    warnings.push('Serving unclear; verify label.')
+  }
+
+  ;(food.foodPortions ?? [])
+    .filter((portion) => Number.isFinite(portion.gramWeight ?? NaN))
+    .slice(0, 8)
+    .forEach((portion, index) => {
+      const unit = cleanText(portion.measureUnit?.abbreviation || portion.measureUnit?.name || portion.modifier) ?? 'serving'
+      const quantity = numberValue(portion.amount) ?? 1
+      const labelText = cleanText(portion.portionDescription || portion.modifier || `${quantity} ${unit}`) ?? `${quantity} ${unit}`
+      const grams = Number(portion.gramWeight)
+      options.push({
+        id: `portion-${portion.id ?? index}`,
+        label: optionLabelWithGrams(labelText, grams),
+        quantity,
+        unit,
+        grams,
+        multiplierFromBase: grams / 100,
+        source: 'common',
+        isDefault: !options.some((option) => option.isDefault),
+      })
+    })
+
+  if (!options.length && !food.dataType?.toLowerCase().includes('branded')) {
+    warnings.push('Portion data is missing; use 100g or custom grams.')
+  }
+
+  return {
+    options: [...options, per100gOption(), customGramsOption()],
+    warnings,
+  }
+}
+
+export const parseUsdaFoodDetail = (food: UsdaFood): NormalizedFoodDetail | null => {
+  const candidate = parseUsdaCandidate(food)
+  if (!candidate) {
+    return null
+  }
+
+  const totalCarbohydrateGrams = findNutrient(food, totalCarbohydrateMatcher)
+  const fiberGrams = findNutrient(food, fiberMatcher)
+  const sugarAlcoholGrams = findNutrient(food, sugarAlcoholMatcher)
+  const { options, warnings } = servingOptionsForFood(food)
+
+  return {
+    candidate,
+    baseServing: {
+      label: '100g reference',
+      grams: 100,
+      quantity: 100,
+      unit: 'g',
+    },
+    nutrientsForBaseServing: {
+      totalCarbohydrateGrams,
+      fiberGrams,
+      sugarAlcoholGrams,
+    },
+    servingOptions: options,
+    attributionText: 'USDA FoodData Central',
+    warnings,
+    raw: food,
+  }
+}
+
+export const searchUsdaFoods = async (query: string, options: FoodLookupOptions): Promise<NormalizedFoodCandidate[]> => {
   const trimmed = query.trim()
   if (!trimmed) {
     return []
@@ -147,14 +295,14 @@ export const searchUsdaFoods = async (query: string, options: FoodLookupOptions)
   const json = (await response.json()) as { foods?: UsdaFood[] }
 
   return (json.foods ?? [])
-    .map((food) => parseUsdaFood(food, options))
-    .filter((food): food is FoodLookupResult => Boolean(food))
+    .map((food) => parseUsdaCandidate(food))
+    .filter((food): food is NormalizedFoodCandidate => Boolean(food))
 }
 
 export const getUsdaFoodDetails = async (
   fdcId: string,
   options: FoodLookupOptions,
-): Promise<FoodLookupResult | null> => {
+): Promise<NormalizedFoodDetail | null> => {
   if (!options.apiKey?.trim()) {
     throw new FoodLookupError('Add your FoodData Central API key in Net Carb Settings first.')
   }
@@ -167,5 +315,5 @@ export const getUsdaFoodDetails = async (
     throw new FoodLookupError(await usdaErrorMessage(response, 'detail lookup'))
   }
 
-  return parseUsdaFood((await response.json()) as UsdaFood, options)
+  return parseUsdaFoodDetail((await response.json()) as UsdaFood)
 }

@@ -10,6 +10,8 @@ import {
   getPrivateSetting,
   importAllData,
   initializeAppData,
+  NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY,
+  NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY,
   saveCarbPreset,
   saveCarbSettings,
   savePrivateSetting,
@@ -50,10 +52,12 @@ describe('carb repository operations', () => {
     expect(afterDelete.workoutLogs).toHaveLength(1)
   })
 
-  it('exports carb entries and presets while excluding the USDA key by default', async () => {
+  it('exports carb entries and presets while excluding USDA and Nutritionix credentials by default', async () => {
     await initializeAppData()
     const data = await getAppData()
     await savePrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY, 'private-key')
+    await savePrivateSetting(NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY, 'nutritionix-id')
+    await savePrivateSetting(NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY, 'nutritionix-key')
     await saveCarbSettings({ ...data.carbSettings, dailyNetCarbGoalGrams: 60 })
     await createCarbEntry({
       dateISO: '2026-06-22',
@@ -69,12 +73,16 @@ describe('carb repository operations', () => {
     expect(exported.data.carbEntries).toHaveLength(1)
     expect(exported.data.carbPresets).toHaveLength(1)
     expect('foodDataCentralApiKey' in exported.data.carbSettings).toBe(false)
+    expect(JSON.stringify(exported)).not.toContain('nutritionix-id')
+    expect(JSON.stringify(exported)).not.toContain('nutritionix-key')
 
     const exportedPrivate = JSON.parse(await exportAllData({ includePrivateSettings: true })) as {
       data: Awaited<ReturnType<typeof getAppData>>
     }
     expect('foodDataCentralApiKey' in exportedPrivate.data.carbSettings).toBe(false)
     expect((await getPrivateSetting(USDA_API_KEY_PRIVATE_SETTING_KEY))?.encryptedOrPlainValue).toBe('private-key')
+    expect((await getPrivateSetting(NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY))?.encryptedOrPlainValue).toBe('nutritionix-id')
+    expect((await getPrivateSetting(NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY))?.encryptedOrPlainValue).toBe('nutritionix-key')
   })
 
   it('imports carb entries, goal history, and presets from backup JSON', async () => {

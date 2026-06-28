@@ -32,7 +32,8 @@ export const sourceLabels: Record<CarbSourceType, string> = {
   manual: 'manual',
   preset: 'preset',
   usda: 'USDA lookup',
-  openFoodFacts: 'legacy package lookup',
+  nutritionix: 'Nutritionix lookup',
+  openFoodFacts: 'packaged lookup',
 }
 
 export const defaultCarbSettings = (updatedAt: string): CarbSettings => ({

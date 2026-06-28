@@ -46,18 +46,24 @@ import {
 
 const nowIso = () => new Date().toISOString()
 export const USDA_API_KEY_PRIVATE_SETTING_KEY = 'usdaFoodDataCentralApiKey'
+export const NUTRITIONIX_APP_ID_PRIVATE_SETTING_KEY = 'nutritionixAppId'
+export const NUTRITIONIX_APP_KEY_PRIVATE_SETTING_KEY = 'nutritionixAppKey'
 
 type LegacyCarbSettings = CarbSettings & {
   foodDataCentralApiKey?: string
-  preferredNutritionSource?: CarbSettings['preferredNutritionSource'] | 'openFoodFacts'
+  preferredNutritionSource?: CarbSettings['preferredNutritionSource'] | 'openFoodFacts' | 'nutritionix'
 }
+
+const nutritionSources: CarbSettings['preferredNutritionSource'][] = ['manual', 'usda', 'nutritionix', 'openFoodFacts']
 
 const sanitizeCarbSettings = (settings: LegacyCarbSettings): CarbSettings => ({
   id: 'default',
   dailyNetCarbGoalGrams: normalizeCarbGrams(settings.dailyNetCarbGoalGrams),
   saveFoodNamesInLog: Boolean(settings.saveFoodNamesInLog),
   subtractSugarAlcoholsWhenAvailable: Boolean(settings.subtractSugarAlcoholsWhenAvailable),
-  preferredNutritionSource: settings.preferredNutritionSource === 'usda' ? 'usda' : 'manual',
+  preferredNutritionSource: nutritionSources.includes(settings.preferredNutritionSource as CarbSettings['preferredNutritionSource'])
+    ? (settings.preferredNutritionSource as CarbSettings['preferredNutritionSource'])
+    : 'manual',
   updatedAt: settings.updatedAt,
 })
 
@@ -224,7 +230,7 @@ export const migrateLegacyUsdaKeyToPrivateSetting = async () => {
     }
   }
 
-  if (settings.foodDataCentralApiKey || (settings as { preferredNutritionSource?: string }).preferredNutritionSource === 'openFoodFacts') {
+  if (settings.foodDataCentralApiKey || (settings as { preferredNutritionSource?: string }).preferredNutritionSource !== 'manual') {
     await db.carbSettings.put(sanitizeCarbSettings(settings))
   }
 }
