@@ -52,12 +52,16 @@ type LegacyCarbSettings = CarbSettings & {
   preferredNutritionSource?: CarbSettings['preferredNutritionSource'] | 'openFoodFacts'
 }
 
+const nutritionSources: CarbSettings['preferredNutritionSource'][] = ['manual', 'usda', 'openFoodFacts']
+
 const sanitizeCarbSettings = (settings: LegacyCarbSettings): CarbSettings => ({
   id: 'default',
   dailyNetCarbGoalGrams: normalizeCarbGrams(settings.dailyNetCarbGoalGrams),
   saveFoodNamesInLog: Boolean(settings.saveFoodNamesInLog),
   subtractSugarAlcoholsWhenAvailable: Boolean(settings.subtractSugarAlcoholsWhenAvailable),
-  preferredNutritionSource: settings.preferredNutritionSource === 'usda' ? 'usda' : 'manual',
+  preferredNutritionSource: nutritionSources.includes(settings.preferredNutritionSource as CarbSettings['preferredNutritionSource'])
+    ? (settings.preferredNutritionSource as CarbSettings['preferredNutritionSource'])
+    : 'manual',
   updatedAt: settings.updatedAt,
 })
 
@@ -224,7 +228,7 @@ export const migrateLegacyUsdaKeyToPrivateSetting = async () => {
     }
   }
 
-  if (settings.foodDataCentralApiKey || (settings as { preferredNutritionSource?: string }).preferredNutritionSource === 'openFoodFacts') {
+  if (settings.foodDataCentralApiKey || (settings as { preferredNutritionSource?: string }).preferredNutritionSource !== 'manual') {
     await db.carbSettings.put(sanitizeCarbSettings(settings))
   }
 }

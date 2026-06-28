@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ramprep-routine-branding-v1-5'
+const CACHE_NAME = 'ramprep-food-lookup-ux-v1-7'
 const APP_SHELL = [
   './',
   './index.html',

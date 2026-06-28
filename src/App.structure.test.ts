@@ -87,12 +87,26 @@ describe('mobile UI structure', () => {
     ])
   })
 
-  it('uses USDA result selections to set the Quick Add net-carb amount', () => {
+  it('requires serving confirmation before food lookup can add net carbs', () => {
     const selectLookupBlock = sourceBetween('const handleSelectLookupResult', 'const handleAddLookupCarbs')
 
-    expect(selectLookupBlock).toContain('setCarbAmount(normalizeCarbGrams(detailed.netCarbs))')
-    expect(selectLookupBlock).toContain('setCarbAmount(normalizeCarbGrams(result.netCarbs))')
-    expect(appSource).toContain('{result.netCarbs} net carbs')
+    expect(selectLookupBlock).toContain('setLookupSelected(detailed)')
+    expect(selectLookupBlock).not.toContain('setCarbAmount(normalizeCarbGrams')
+    expect(appSource).toContain('<ServingPicker')
+    expect(appSource).toContain("type FoodLookupStep = 'idle' | 'searching' | 'results' | 'serving' | 'confirmed' | 'added' | 'error'")
+    expect(appSource).toContain('selected-food-card')
+    expect(appSource).toContain('Change food')
+    expect(appSource).toContain('Add another')
+    expect(appSource).toContain('focusActionResult(lookupResultsRef')
+    expect(appSource).toContain('focusActionResult(selectedFoodRef')
+    expect(appSource).toContain('focusActionResult(formulaRef')
+    expect(appSource).toContain('<b>Choose serving</b>')
+    expect(appSource).not.toContain('{result.netCarbs} net carbs')
+    expect(appSource).toContain('Packaged / Open Food Facts')
+    const removedLookupSource = `${'Nutri'}${'tionix'}`
+    expect(appSource).not.toContain(removedLookupSource)
+    expect(appSource).not.toContain(removedLookupSource.toLowerCase())
+    expect(appSource).not.toMatch(/calories/i)
   })
 
   it('uses the RAMprep default library and keeps downward dog search-only', () => {

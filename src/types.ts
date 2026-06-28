@@ -46,7 +46,7 @@ export type CarbMealSlot =
   | 'dinner'
   | 'eveningSnack'
 export type CarbSourceType = 'manual' | 'preset' | 'usda' | 'openFoodFacts'
-export type PreferredNutritionSource = 'manual' | 'usda'
+export type PreferredNutritionSource = 'manual' | 'usda' | 'openFoodFacts'
 
 export interface ExerciseDefaults {
   sets?: number
@@ -267,6 +267,9 @@ export interface CarbPreset {
   name: string
   netCarbs: number
   servingDescription?: string
+  servingGrams?: number
+  quantity?: number
+  formulaText?: string
   sourceType?: CarbSourceType
   sourceId?: string
   useCount: number

@@ -32,6 +32,7 @@ import {
   X,
 } from 'lucide-react'
 import './App.css'
+import { ServingPicker, type ServingPickerSubmission } from './components/ServingPicker'
 import {
   addExerciseToRoutine,
   clearFoodLookupCache,
@@ -131,6 +132,7 @@ import {
   resolveExerciseLogDefaults,
 } from './utils/defaults'
 import { calculateRuckLoadPounds, ruckLoadNotice } from './utils/ruck'
+import { useActionResultFocus } from './utils/useActionResultFocus'
 import { functionalCategories, getExerciseCategory, type FunctionalCategory } from './utils/exerciseCategories'
 import {
   buildCarbReports,
@@ -144,8 +146,9 @@ import {
   totalCarbsByMeal,
 } from './utils/carbs'
 import { validateGoogleAppsScriptUrl } from './services/googleSheetsSync'
+import { searchOpenFoodFactsProducts } from './services/foodLookup/openFoodFacts'
 import { getUsdaFoodDetails, searchUsdaFoods } from './services/foodLookup/usdaFoodDataCentral'
-import type { FoodLookupResult } from './services/foodLookup/types'
+import type { LookupSearchSource, NormalizedFoodCandidate, NormalizedFoodDetail } from './services/foodLookup/types'
 import type {
   AppData,
   BikeTourPurpose,
@@ -171,6 +174,11 @@ type Page = 'dashboard' | 'train' | 'ride' | 'workouts' | 'log' | 'carbs' | 'pro
 type WorkoutsTab = 'routines' | 'library'
 type LogMode = 'recommended' | 'routine' | 'free'
 type ActiveWorkoutStage = 'workout' | 'review'
+type FoodLookupStep = 'idle' | 'searching' | 'results' | 'serving' | 'confirmed' | 'added' | 'error'
+const foodLookupSourceLabels: Record<LookupSearchSource, string> = {
+  usda: 'USDA FoodData Central',
+  openFoodFacts: 'Packaged / Open Food Facts',
+}
 interface ActiveWorkoutState {
   stage: ActiveWorkoutStage
   currentIndex: number
@@ -1121,10 +1129,13 @@ function App() {
   const [carbAmount, setCarbAmount] = useState(0)
   const [carbEditEntry, setCarbEditEntry] = useState<CarbEntry | null>(null)
   const [presetDraft, setPresetDraft] = useState({ id: '', name: '', netCarbs: 0, servingDescription: '' })
+  const [lookupSource, setLookupSource] = useState<LookupSearchSource>('usda')
+  const [lookupStep, setLookupStep] = useState<FoodLookupStep>('idle')
   const [lookupQuery, setLookupQuery] = useState('')
-  const [lookupResults, setLookupResults] = useState<FoodLookupResult[]>([])
-  const [lookupSelected, setLookupSelected] = useState<FoodLookupResult | null>(null)
-  const [lookupOverride, setLookupOverride] = useState<number | undefined>()
+  const [lookupBarcode, setLookupBarcode] = useState('')
+  const [lookupResults, setLookupResults] = useState<NormalizedFoodCandidate[]>([])
+  const [lookupDetailsById, setLookupDetailsById] = useState<Record<string, NormalizedFoodDetail>>({})
+  const [lookupSelected, setLookupSelected] = useState<NormalizedFoodDetail | null>(null)
   const [lookupLoading, setLookupLoading] = useState(false)
   const [lookupError, setLookupError] = useState('')
   const [usdaKeyDraft, setUsdaKeyDraft] = useState('')
@@ -1162,6 +1173,16 @@ function App() {
   const [roadmapConflictDraft, setRoadmapConflictDraft] = useState({ startsOn: '', endsOn: '', note: '' })
   const [historyExerciseName, setHistoryExerciseName] = useState('')
   const activeWorkoutDraftRestoredRef = useRef(false)
+  const focusActionResult = useActionResultFocus()
+  const carbHeroRef = useRef<HTMLDivElement | null>(null)
+  const lookupResultsRef = useRef<HTMLDivElement | null>(null)
+  const selectedFoodRef = useRef<HTMLDivElement | null>(null)
+  const formulaRef = useRef<HTMLDivElement | null>(null)
+  const carbReportsRef = useRef<HTMLDivElement | null>(null)
+  const variationPreviewRef = useRef<HTMLElement | null>(null)
+  const routineBrowserRef = useRef<HTMLElement | null>(null)
+  const defaultsPanelRef = useRef<HTMLDetailsElement | null>(null)
+  const usdaStatusRef = useRef<HTMLParagraphElement | null>(null)
 
   const refresh = useCallback(async () => {
     const [snapshot, usdaPrivateSetting] = await Promise.all([
@@ -1172,6 +1193,9 @@ function App() {
     setSettingsDraft(snapshot.settings)
     setCarbSettingsDraft(snapshot.carbSettings)
     setUsdaKeySaved(Boolean(usdaPrivateSetting?.encryptedOrPlainValue.trim()))
+    if (snapshot.carbSettings.preferredNutritionSource !== 'manual') {
+      setLookupSource(snapshot.carbSettings.preferredNutritionSource)
+    }
     setScheduleDraft(snapshot.schedule)
     setLoading(false)
   }, [])
@@ -1374,6 +1398,7 @@ function App() {
     }
 
     setVariationProposal(proposal)
+    focusActionResult(variationPreviewRef, { focus: true })
   }
 
   const handleApplyVariationToday = async () => {
@@ -2100,13 +2125,16 @@ function App() {
         subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
       })
       setUsdaKeySaved(true)
-      setUsdaKeyStatus(results[0] ? `USDA test found ${results[0].name}: ${results[0].formula}` : 'USDA responded, but no matching foods were found.')
+      setUsdaKeyStatus(results[0] ? `USDA test found ${results[0].name}. Choose it in Food lookup to confirm serving.` : 'USDA responded, but no matching foods were found.')
+      focusActionResult(usdaStatusRef)
     } catch (error) {
       setUsdaKeyStatus(error instanceof Error ? error.message : 'USDA test failed.')
+      focusActionResult(usdaStatusRef)
     } finally {
       setUsdaKeyBusy(false)
     }
   }
+
 
   const handlePresetSave = async () => {
     const name = presetDraft.name.trim()
@@ -2128,6 +2156,12 @@ function App() {
   }
 
   const handleUsePreset = async (preset: AppData['carbPresets'][number]) => {
+    const confirmed = window.confirm(`Add ${preset.netCarbs}g to ${carbMealSlotLabels[carbMealSlot]}?`)
+    if (!confirmed) {
+      setCarbAmount(preset.netCarbs)
+      return
+    }
+
     await addCarbEntry({
       netCarbs: preset.netCarbs,
       sourceType: 'preset',
@@ -2140,92 +2174,145 @@ function App() {
   }
 
   const handleLookupSearch = async () => {
-    if (!lookupQuery.trim() || !carbSettingsDraft) {
+    if ((!lookupQuery.trim() && !(lookupSource === 'openFoodFacts' && lookupBarcode.trim())) || !carbSettingsDraft) {
       return
     }
 
+    setLookupStep('searching')
     setLookupLoading(true)
     setLookupError('')
     setLookupSelected(null)
+    setLookupDetailsById({})
     try {
-      const cached = await getFoodLookupCache('usda', lookupQuery)
+      const cacheKey = lookupSource === 'openFoodFacts' && lookupBarcode.trim()
+        ? `barcode:${lookupBarcode.trim()}`
+        : lookupQuery.trim()
+      const cached = await getFoodLookupCache(lookupSource, cacheKey)
       if (cached) {
-        setLookupResults(JSON.parse(cached.resultJson) as FoodLookupResult[])
+        if (lookupSource === 'usda') {
+          const cachedResults = JSON.parse(cached.resultJson) as NormalizedFoodCandidate[]
+          setLookupResults(cachedResults)
+          setLookupStep(cachedResults.length ? 'results' : 'error')
+        } else {
+          const details = JSON.parse(cached.resultJson) as NormalizedFoodDetail[]
+          setLookupResults(details.map((detail) => detail.candidate))
+          setLookupDetailsById(Object.fromEntries(details.map((detail) => [detail.candidate.id, detail])))
+          setLookupStep(details.length ? 'results' : 'error')
+        }
+        focusActionResult(lookupResultsRef, { focus: true })
         return
       }
 
-      const options = {
-        apiKey: await loadUsdaApiKey(),
-        subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
+      if (lookupSource === 'usda') {
+        const results = await searchUsdaFoods(lookupQuery, {
+          apiKey: await loadUsdaApiKey(),
+          subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
+        })
+        setLookupResults(results)
+        await saveFoodLookupCache('usda', cacheKey, JSON.stringify(results))
+        if (!results.length) {
+          setLookupError('No lookup results found. Manual entry still works.')
+          setLookupStep('error')
+        } else {
+          setLookupStep('results')
+          focusActionResult(lookupResultsRef, { focus: true })
+        }
+        return
       }
-      const results = await searchUsdaFoods(lookupQuery, options)
-      setLookupResults(results)
-      await saveFoodLookupCache('usda', lookupQuery, JSON.stringify(results))
-      if (!results.length) {
+
+      const details = await searchOpenFoodFactsProducts({
+        query: lookupQuery,
+        barcode: lookupBarcode,
+      })
+      setLookupResults(details.map((detail) => detail.candidate))
+      setLookupDetailsById(Object.fromEntries(details.map((detail) => [detail.candidate.id, detail])))
+      await saveFoodLookupCache('openFoodFacts', cacheKey, JSON.stringify(details))
+      if (!details.length) {
         setLookupError('No lookup results found. Manual entry still works.')
+        setLookupStep('error')
+      } else {
+        setLookupStep('results')
+        focusActionResult(lookupResultsRef, { focus: true })
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Lookup failed.'
       setLookupError(message)
       setLookupResults([])
+      setLookupStep('error')
     } finally {
       setLookupLoading(false)
     }
   }
 
-  const handleSelectLookupResult = async (result: FoodLookupResult) => {
+  const handleSelectLookupResult = async (result: NormalizedFoodCandidate) => {
     setLookupError('')
     setLookupLoading(true)
     try {
       const detailed =
         result.source === 'usda' && carbSettingsDraft
-          ? (await getUsdaFoodDetails(result.sourceId, {
+          ? await getUsdaFoodDetails(result.sourceId, {
               apiKey: await loadUsdaApiKey(),
               subtractSugarAlcoholsWhenAvailable: carbSettingsDraft.subtractSugarAlcoholsWhenAvailable,
-            })) ?? result
-          : result
+            })
+          : lookupDetailsById[result.id]
+      if (!detailed) {
+        throw new Error('Food detail was not available. Search again or use manual entry.')
+      }
       setLookupSelected(detailed)
-      setLookupOverride(detailed.netCarbs)
-      setCarbAmount(normalizeCarbGrams(detailed.netCarbs))
-      showFlash(`Quick add set to ${detailed.netCarbs} net carbs.`)
-    } catch {
-      setLookupSelected(result)
-      setLookupOverride(result.netCarbs)
-      setCarbAmount(normalizeCarbGrams(result.netCarbs))
-      showFlash(`Quick add set to ${result.netCarbs} net carbs.`)
+      setLookupStep('serving')
+      focusActionResult(selectedFoodRef, { focus: true })
+      showFlash('Choose serving before adding net carbs.')
+    } catch (error) {
+      setLookupSelected(null)
+      setLookupError(error instanceof Error ? error.message : 'Unable to open serving picker.')
+      setLookupStep('error')
     } finally {
       setLookupLoading(false)
     }
   }
 
-  const handleAddLookupCarbs = async () => {
-    if (!lookupSelected) {
-      return
-    }
-
-    await addCarbEntry({
-      netCarbs: lookupOverride ?? lookupSelected.netCarbs,
-      sourceType: lookupSelected.sourceType,
-      sourceLabel: lookupSelected.attribution,
-      savedFoodName: lookupSelected.name,
-    })
-    showFlash('Lookup net carbs added.', true)
+  const handleChangeLookupFood = () => {
+    setLookupSelected(null)
+    setLookupStep(lookupResults.length ? 'results' : 'idle')
+    focusActionResult(lookupResults.length ? lookupResultsRef : null)
   }
 
-  const handleSaveLookupPreset = async () => {
-    if (!lookupSelected) {
-      return
-    }
+  const handleLookupFormulaChange = () => {
+    setLookupStep('confirmed')
+    focusActionResult(formulaRef)
+  }
 
+  const handleAddLookupCarbs = async (submission: ServingPickerSubmission) => {
+    const mealLabel = carbMealSlotLabels[carbMealSlot]
+    const sourceType = submission.overrideUsed ? 'manual' : submission.detail.candidate.source
+    await addCarbEntry({
+      netCarbs: submission.netCarbs,
+      sourceType,
+      sourceLabel: submission.overrideUsed
+        ? `${submission.detail.attributionText} manual override`
+        : submission.detail.attributionText,
+      savedFoodName: submission.detail.candidate.name,
+    })
+    setCarbAmount(submission.netCarbs)
+    setLookupSelected(null)
+    setLookupStep('added')
+    focusActionResult(carbHeroRef)
+    showFlash(`Added ${submission.netCarbs}g to ${mealLabel}.`, true)
+  }
+
+  const handleSaveLookupPreset = async (submission: ServingPickerSubmission) => {
     await saveCarbPreset({
-      name: lookupSelected.name,
-      netCarbs: lookupOverride ?? lookupSelected.netCarbs,
-      servingDescription: lookupSelected.servingSize,
-      sourceType: lookupSelected.sourceType,
-      sourceId: lookupSelected.sourceId,
+      name: submission.detail.candidate.name,
+      netCarbs: submission.netCarbs,
+      servingDescription: submission.servingLabel,
+      servingGrams: submission.servingGrams,
+      quantity: submission.quantity,
+      formulaText: submission.overrideUsed ? `${submission.calculation.formulaLabel} (manual override ${submission.netCarbs}g)` : submission.calculation.formulaLabel,
+      sourceType: submission.overrideUsed ? 'manual' : submission.detail.candidate.source,
+      sourceId: submission.detail.candidate.sourceId,
     })
     await refresh()
-    showFlash('Lookup saved as preset.')
+    showFlash('Preset saved.')
   }
 
   const handleImport = async (file?: File) => {
@@ -2257,7 +2344,7 @@ function App() {
   const selectedDayGoal = goalForDate(carbSelectedDate, data.carbGoalHistory, data.carbSettings)
   const selectedDayStatus = carbStatusText(selectedDayTotal, selectedDayGoal)
   const recentPresets = sortedCarbPresets(data.carbPresets)
-  const lookupSourceLabel = 'USDA FoodData Central'
+  const lookupSourceLabel = foodLookupSourceLabels[lookupSource]
   const routineById = new Map(routines.map((routine) => [routine.id, routine]))
   const completedLogs = logs.filter((log) => log.status === 'completed')
   const strengthSessions = completedLogs.filter((log) => routineById.get(log.routineId ?? '')?.type === 'strength').length
@@ -2445,7 +2532,14 @@ function App() {
       )}
 
       {routineBrowserOpen && (
-        <section className="routine-browser-view" role="dialog" aria-modal="true" aria-labelledby="routine-browser-title">
+        <section
+          className="routine-browser-view"
+          ref={routineBrowserRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="routine-browser-title"
+          tabIndex={-1}
+        >
           <header className="routine-browser-header">
             <button
               className="demo-back-button"
@@ -2583,7 +2677,14 @@ function App() {
       )}
 
       {variationProposal && (
-        <section className="variation-preview-view" role="dialog" aria-modal="true" aria-labelledby="variation-preview-title">
+        <section
+          className="variation-preview-view"
+          ref={variationPreviewRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="variation-preview-title"
+          tabIndex={-1}
+        >
           <div className="variation-preview-panel">
             <div>
               <p className="eyebrow">Change it up</p>
@@ -2752,7 +2853,15 @@ function App() {
             </div>
           </section>
 
-          <details className="active-collapsible defaults-collapsible">
+          <details
+            className="active-collapsible defaults-collapsible"
+            ref={defaultsPanelRef}
+            onToggle={(event) => {
+              if (event.currentTarget.open) {
+                focusActionResult(defaultsPanelRef)
+              }
+            }}
+          >
             <summary>Defaults</summary>
             <div className="defaults-action-grid">
               <button className="ghost-button compact-cta" type="button" onClick={() => applyLastCompletedToDraftEntry(activeWorkout.currentIndex)}>
@@ -2914,6 +3023,7 @@ function App() {
               onClick={() => {
                 setRoutineBrowserOpen(true)
                 setRoutinePreviewId('')
+                focusActionResult(routineBrowserRef, { focus: true })
               }}
             >
               Browse routines
@@ -4174,7 +4284,7 @@ function App() {
       {page === 'carbs' && (
         <main className="page-grid carb-page">
           <Card className="carb-hero">
-            <div className="section-title">
+            <div className="section-title" ref={carbHeroRef} tabIndex={-1}>
               <div>
                 <p className="eyebrow">Today</p>
                 <h2>
@@ -4352,7 +4462,17 @@ function App() {
               <button className={carbPanel === 'presets' ? 'primary-button' : 'ghost-button'} type="button" onClick={() => setCarbPanel(carbPanel === 'presets' ? 'none' : 'presets')}>
                 Presets
               </button>
-              <button className={carbPanel === 'reports' ? 'primary-button' : 'ghost-button'} type="button" onClick={() => setCarbPanel(carbPanel === 'reports' ? 'none' : 'reports')}>
+              <button
+                className={carbPanel === 'reports' ? 'primary-button' : 'ghost-button'}
+                type="button"
+                onClick={() => {
+                  const opening = carbPanel !== 'reports'
+                  setCarbPanel(opening ? 'reports' : 'none')
+                  if (opening) {
+                    focusActionResult(carbReportsRef, { focus: true })
+                  }
+                }}
+              >
                 Reports
               </button>
             </div>
@@ -4368,66 +4488,118 @@ function App() {
             </div>
             <div className="form-grid">
               <label>
-                Search
+                Source
+                <select
+                  value={lookupSource}
+                  onChange={(event) => {
+                    setLookupSource(event.target.value as LookupSearchSource)
+                    setLookupResults([])
+                    setLookupDetailsById({})
+                    setLookupSelected(null)
+                    setLookupError('')
+                    setLookupStep('idle')
+                  }}
+                >
+                  <option value="usda">USDA</option>
+                  <option value="openFoodFacts">Packaged / Open Food Facts</option>
+                </select>
+              </label>
+              <label>
+                {lookupSource === 'openFoodFacts' ? 'Product search' : 'Search'}
                 <input
                   value={lookupQuery}
                   onChange={(event) => setLookupQuery(event.target.value)}
-                  placeholder="food or branded item"
+                  placeholder={lookupSource === 'openFoodFacts' ? 'packaged item name' : 'food or branded item'}
                 />
               </label>
+              {lookupSource === 'openFoodFacts' && (
+                <label>
+                  Barcode
+                  <input
+                    inputMode="numeric"
+                    value={lookupBarcode}
+                    onChange={(event) => setLookupBarcode(event.target.value)}
+                    placeholder="scan or type barcode"
+                  />
+                </label>
+              )}
             </div>
-            {!usdaKeySaved && <p className="notice">Add your USDA key in Net Carb Settings before lookup. Manual net-carb entry still works.</p>}
+            {lookupSource === 'usda' && !usdaKeySaved && <p className="notice">Add your USDA key in Net Carb Settings before lookup. Manual net-carb entry still works.</p>}
+            {lookupSource === 'openFoodFacts' && <p className="notice">Open Food Facts is crowdsourced; verify the package label. Search runs only when you tap Search.</p>}
             <button className="ghost-button" type="button" disabled={lookupLoading} onClick={() => void handleLookupSearch()}>
               <Search aria-hidden="true" size={18} />
-              Search
+              {lookupStep === 'searching' ? 'Searching' : 'Search'}
             </button>
             {lookupError && <p className="notice">{lookupError}</p>}
-            {lookupResults.length ? (
-              <div className="lookup-results">
+            {lookupStep === 'results' && lookupResults.length ? (
+              <div className="lookup-results" ref={lookupResultsRef} tabIndex={-1}>
                 {lookupResults.map((result) => (
                   <button key={result.id} type="button" onClick={() => void handleSelectLookupResult(result)}>
                     <span>
                       <strong>{result.name}</strong>
                       <small>
-                        {result.brand ? `${result.brand} · ` : ''}
-                        {result.servingSize ?? 'serving unclear'}
+                        {result.brandName ? `${result.brandName} · ` : ''}
+                        {result.dataType ? `${result.dataType} · ` : ''}
+                        {result.servingLabel ? `${result.servingLabel}` : 'Needs serving'}
                       </small>
                     </span>
-                    <b>{result.netCarbs} net carbs</b>
+                    <b>Choose serving</b>
                   </button>
                 ))}
               </div>
             ) : null}
-            {lookupSelected && (
-              <div className="lookup-detail">
+            {lookupSelected && lookupStep !== 'added' && (
+              <div className="selected-food-card" ref={selectedFoodRef} tabIndex={-1}>
                 <div>
-                  <p className="eyebrow">{lookupSelected.attribution}</p>
-                  <h3>{lookupSelected.name}</h3>
-                  <p>{lookupSelected.formula}</p>
+                  <p className="eyebrow">{lookupSelected.attributionText}</p>
+                  <h3>{lookupSelected.candidate.name}</h3>
                   <p>
-                    {lookupSelected.servingSize ?? 'Serving unclear'}
-                    {lookupSelected.brand ? ` · ${lookupSelected.brand}` : ''}
+                    {lookupSelected.candidate.brandName ? `${lookupSelected.candidate.brandName} · ` : ''}
+                    {lookupSelected.candidate.dataType ?? 'Food lookup'} · Choose serving
                   </p>
-                  {lookupSelected.servingWarning && <p className="notice">{lookupSelected.servingWarning}</p>}
                 </div>
-                <NumberStepper
-                  label="Manual override"
-                  value={lookupOverride}
-                  min={0}
-                  max={300}
-                  suffix="g"
-                  quickOptions={carbQuickPicks}
-                  quickIncrements={[1, 5, 10]}
-                  onChange={(value) => setLookupOverride(normalizeCarbGrams(value))}
-                />
+                <button className="ghost-button compact-cta" type="button" onClick={handleChangeLookupFood}>
+                  Change food
+                </button>
+              </div>
+            )}
+            {lookupSelected && lookupStep !== 'added' && (
+              <ServingPicker
+                detail={lookupSelected}
+                formulaRef={formulaRef}
+                key={lookupSelected.candidate.id}
+                mealLabel={carbMealSlotLabels[carbMealSlot]}
+                onFormulaChange={handleLookupFormulaChange}
+                subtractSugarAlcoholsWhenAvailable={carbSettingsDraft.subtractSugarAlcoholsWhenAvailable}
+                onAdd={(submission) => void handleAddLookupCarbs(submission)}
+                onCancel={handleChangeLookupFood}
+                onSavePreset={(submission) => void handleSaveLookupPreset(submission)}
+              />
+            )}
+            {lookupStep === 'added' && (
+              <div className="lookup-added-card" tabIndex={-1}>
+                <strong>Added to {carbMealSlotLabels[carbMealSlot]}</strong>
+                <p>Daily total updated. Manual entry and presets still work offline.</p>
                 <div className="button-grid">
-                  <button className="ghost-button" type="button" onClick={() => void handleAddLookupCarbs()}>
-                    <Plus aria-hidden="true" size={18} />
-                    Add to meal
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => {
+                      setLookupStep(lookupResults.length ? 'results' : 'idle')
+                      focusActionResult(lookupResults.length ? lookupResultsRef : null)
+                    }}
+                  >
+                    Add another
                   </button>
-                  <button className="ghost-button" type="button" onClick={() => void handleSaveLookupPreset()}>
-                    <Save aria-hidden="true" size={18} />
-                    Save preset
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={() => {
+                      setCarbPanel('none')
+                      focusActionResult(carbHeroRef)
+                    }}
+                  >
+                    Done
                   </button>
                 </div>
               </div>
@@ -4525,7 +4697,7 @@ function App() {
           </Card>}
 
           {carbPanel === 'reports' && <Card className="carb-reports-card">
-            <div className="section-title">
+            <div className="section-title" ref={carbReportsRef} tabIndex={-1}>
               <div>
                 <p className="eyebrow">Reports</p>
                 <h2>Net-carb trends</h2>
@@ -5027,6 +5199,7 @@ function App() {
                 >
                   <option value="manual">manual</option>
                   <option value="usda">USDA</option>
+                  <option value="openFoodFacts">Packaged / Open Food Facts</option>
                 </select>
               </label>
               <label>
@@ -5044,7 +5217,7 @@ function App() {
                 <input value={usdaTestQuery} onChange={(event) => setUsdaTestQuery(event.target.value)} placeholder="plain greek yogurt" />
               </label>
             </div>
-            <p className="notice">
+            <p className="notice" ref={usdaStatusRef}>
               Manual entry works offline. USDA key saved locally: {usdaKeySaved ? 'yes' : 'no'}. The key is not included in JSON export.
               {usdaKeyStatus ? ` ${usdaKeyStatus}` : ''}
             </p>
